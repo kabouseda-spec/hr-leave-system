@@ -28,9 +28,15 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-brand-800 to-brand-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🗓️</div>
-          <h1 className="text-3xl font-bold text-white">HR Leave System</h1>
-          <p className="text-blue-200 mt-2">Sign in to manage your leaves</p>
+          <div className="flex justify-center mb-5">
+            <img
+              src="/logo.png"
+              alt="Kinetics Group"
+              className="h-16 object-contain drop-shadow-lg"
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-white">HR Leave System</h1>
+          <p className="text-blue-200 mt-1">Sign in to manage your leaves</p>
         </div>
 
         <div className="card">
