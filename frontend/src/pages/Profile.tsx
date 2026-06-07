@@ -22,7 +22,7 @@ export default function Profile() {
   const [family, setFamily] = useState<FamilyMember[]>([]);
 
   // Personal form
-  const [personal, setPersonal] = useState({ date_of_birth: '', spouse_name: '', spouse_dob: '', marriage_anniversary: '' });
+  const [personal, setPersonal] = useState({ date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '' });
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalMsg, setPersonalMsg] = useState('');
 
@@ -48,6 +48,7 @@ export default function Profile() {
         date_of_birth: e.date_of_birth || '',
         spouse_name: e.spouse_name || '',
         spouse_dob: e.spouse_dob || '',
+        spouse_in_uae: !!e.spouse_in_uae,
         marriage_anniversary: e.marriage_anniversary || '',
       });
       setFamily(famRes.data);
@@ -182,6 +183,18 @@ export default function Profile() {
                 <input type="date" className="input"
                   value={personal.spouse_dob}
                   onChange={e => setPersonal(p => ({ ...p, spouse_dob: e.target.value }))} />
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <input
+                  type="checkbox"
+                  id="spouse_in_uae"
+                  checked={personal.spouse_in_uae}
+                  onChange={e => setPersonal(p => ({ ...p, spouse_in_uae: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                />
+                <label htmlFor="spouse_in_uae" className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                  Spouse / Partner is currently in the UAE 🇦🇪
+                </label>
               </div>
               <div>
                 <label className="label">Wedding Anniversary</label>

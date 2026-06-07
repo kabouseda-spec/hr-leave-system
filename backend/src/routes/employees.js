@@ -40,7 +40,7 @@ router.post('/', auth, rbac('hr_admin'), (req, res) => {
     employee_number, full_name, email, password, role,
     department, manager_id, hire_date, probation_end_date, basic_salary,
     passport_number, passport_expiry, visa_number, visa_type, visa_expiry, visa_country,
-    date_of_birth, spouse_name, spouse_dob, marriage_anniversary,
+    date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;
 
   if (!employee_number || !full_name || !email || !password || !role || !department || !hire_date) {
@@ -115,7 +115,7 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     full_name, role, department, manager_id, hire_date, probation_end_date,
     basic_salary, is_active, passport_number, passport_expiry,
     visa_number, visa_type, visa_expiry, visa_country, end_of_service_date,
-    date_of_birth, spouse_name, spouse_dob, marriage_anniversary,
+    date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;
 
   // Recompute rollover_month if hire_date changes
@@ -146,13 +146,14 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     date_of_birth = COALESCE(?, date_of_birth),
     spouse_name = COALESCE(?, spouse_name),
     spouse_dob = COALESCE(?, spouse_dob),
+    spouse_in_uae = COALESCE(?, spouse_in_uae),
     marriage_anniversary = COALESCE(?, marriage_anniversary),
     updated_at = datetime('now')
     WHERE id = ?`).run(
     n(full_name), n(role), n(department), n(manager_id), n(hire_date), rollover_month,
     n(probation_end_date), n(basic_salary), effectiveIsActive,
     n(passport_number), n(passport_expiry), n(visa_number), n(visa_type), n(visa_expiry), n(visa_country),
-    n(end_of_service_date), n(date_of_birth), n(spouse_name), n(spouse_dob), n(marriage_anniversary),
+    n(end_of_service_date), n(date_of_birth), n(spouse_name), n(spouse_dob), spouse_in_uae ? 1 : 0, n(marriage_anniversary),
     req.params.id,
   );
   res.json({ message: 'Updated' });
@@ -214,11 +215,12 @@ router.patch('/:id/balances/:leaveType', auth, rbac('hr_admin'), (req, res) => {
 
 // Employee self-update personal/family fields (own profile only)
 router.patch('/me/personal', auth, (req, res) => {
-  const { date_of_birth, spouse_name, spouse_dob, marriage_anniversary } = req.body;
+  const { date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary } = req.body;
   db.prepare(`UPDATE employees SET
     date_of_birth = COALESCE(?, date_of_birth),
     spouse_name = COALESCE(?, spouse_name),
     spouse_dob = COALESCE(?, spouse_dob),
+    spouse_in_uae = COALESCE(?, spouse_in_uae),
     marriage_anniversary = COALESCE(?, marriage_anniversary),
     updated_at = datetime('now')
     WHERE id = ?`)

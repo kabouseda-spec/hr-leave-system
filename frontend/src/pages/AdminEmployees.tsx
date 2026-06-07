@@ -60,7 +60,7 @@ const BLANK_FORM = {
   passport_number: '', passport_expiry: '',
   visa_number: '', visa_type: 'Employment', visa_expiry: '', visa_country: 'UAE',
   end_of_service_date: '',
-  date_of_birth: '', spouse_name: '', spouse_dob: '', marriage_anniversary: '',
+  date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '',
 };
 
 export default function AdminEmployees() {
@@ -106,6 +106,7 @@ export default function AdminEmployees() {
         date_of_birth: full.date_of_birth || '',
         spouse_name: full.spouse_name || '',
         spouse_dob: full.spouse_dob || '',
+        spouse_in_uae: !!full.spouse_in_uae,
         marriage_anniversary: full.marriage_anniversary || '',
       });
     } catch {
@@ -119,7 +120,7 @@ export default function AdminEmployees() {
         visa_number: emp.visa_number || '', visa_type: emp.visa_type || 'Employment',
         visa_expiry: emp.visa_expiry || '', visa_country: 'UAE',
         end_of_service_date: emp.end_of_service_date || '',
-        date_of_birth: '', spouse_name: '', spouse_dob: '', marriage_anniversary: '',
+        date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '',
       });
     }
 
@@ -539,6 +540,18 @@ export default function AdminEmployees() {
                           <option>Mission</option>
                           <option>Other</option>
                         </select>
+                      </div>
+                      <div className="col-span-2 flex items-center gap-3 py-1">
+                        <input
+                          type="checkbox"
+                          id="admin_spouse_in_uae"
+                          checked={!!form.spouse_in_uae}
+                          onChange={e => setForm(f => ({ ...f, spouse_in_uae: e.target.checked }))}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                        <label htmlFor="admin_spouse_in_uae" className="text-sm font-medium text-gray-700 cursor-pointer">
+                          Spouse / Partner currently in the UAE 🇦🇪
+                        </label>
                       </div>
                       <div>
                         <label className="label">Visa Expiry Date</label>

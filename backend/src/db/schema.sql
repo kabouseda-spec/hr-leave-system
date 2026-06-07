@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS employees (
   date_of_birth         TEXT,
   spouse_name           TEXT,
   spouse_dob            TEXT,
+  spouse_in_uae         INTEGER DEFAULT 0,
   marriage_anniversary  TEXT,
   -- Visa / passport
   passport_number       TEXT,
