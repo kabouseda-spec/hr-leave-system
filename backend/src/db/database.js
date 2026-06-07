@@ -12,6 +12,46 @@ db.exec('PRAGMA foreign_keys = ON');
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 db.exec(schema);
 
+// ── Run migrations to add any missing columns ─────────────────────────────────
+const migrations = [
+  // employees
+  "ALTER TABLE employees ADD COLUMN rollover_month INTEGER",
+  "ALTER TABLE employees ADD COLUMN end_of_service_date TEXT",
+  "ALTER TABLE employees ADD COLUMN date_of_birth TEXT",
+  "ALTER TABLE employees ADD COLUMN spouse_name TEXT",
+  "ALTER TABLE employees ADD COLUMN spouse_dob TEXT",
+  "ALTER TABLE employees ADD COLUMN marriage_anniversary TEXT",
+  "ALTER TABLE employees ADD COLUMN passport_number TEXT",
+  "ALTER TABLE employees ADD COLUMN passport_expiry TEXT",
+  "ALTER TABLE employees ADD COLUMN visa_number TEXT",
+  "ALTER TABLE employees ADD COLUMN visa_type TEXT",
+  "ALTER TABLE employees ADD COLUMN visa_expiry TEXT",
+  "ALTER TABLE employees ADD COLUMN visa_country TEXT DEFAULT 'UAE'",
+  "ALTER TABLE employees ADD COLUMN visa_reminder_sent_90 INTEGER DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN visa_reminder_sent_30 INTEGER DEFAULT 0",
+  // leave_requests
+  "ALTER TABLE leave_requests ADD COLUMN sub_type TEXT",
+  "ALTER TABLE leave_requests ADD COLUMN certificate_path TEXT",
+  // leave_balances
+  "ALTER TABLE leave_balances ADD COLUMN period_start TEXT",
+  "ALTER TABLE leave_balances ADD COLUMN period_end TEXT",
+  // public_holidays
+  "ALTER TABLE public_holidays ADD COLUMN end_date TEXT",
+  // family_members table
+  `CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    relationship TEXT NOT NULL CHECK(relationship IN ('child','sibling','parent','other')),
+    name TEXT NOT NULL,
+    date_of_birth TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+];
+
+for (const sql of migrations) {
+  try { db.exec(sql); } catch(e) { /* column already exists — skip */ }
+}
+
 
 // node:sqlite returns null-prototype objects — convert them to plain objects
 // so JSON.stringify and property checks work as expected.
