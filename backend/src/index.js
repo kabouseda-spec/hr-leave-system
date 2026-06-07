@@ -43,6 +43,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ── Auto-seed on first run ────────────────────────────────────────────────────
+try {
+  const dbCheck = require('./db/database');
+  const empCount = dbCheck.prepare('SELECT COUNT(*) as c FROM employees').get();
+  if (empCount && empCount.c === 0) {
+    console.log('📦 Fresh database — running seed...');
+    require('./db/seed');
+    console.log('✅ Database seeded');
+  } else {
+    console.log(`ℹ️  Database has ${empCount?.c} employees — skipping seed`);
+  }
+} catch(e) {
+  console.error('⚠️  Seed error:', e.message);
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 HR Leave API running on http://localhost:${PORT}`);
 
