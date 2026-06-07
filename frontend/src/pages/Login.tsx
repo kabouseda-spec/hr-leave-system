@@ -76,22 +76,11 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-gray-100">
-            <p className="text-xs text-gray-500 font-medium mb-3">Demo credentials</p>
-            <div className="space-y-1.5 text-xs text-gray-500">
-              <div className="flex justify-between bg-gray-50 px-3 py-2 rounded">
-                <span className="font-medium">HR Admin</span>
-                <span>admin@company.com / Admin@123</span>
-              </div>
-              <div className="flex justify-between bg-gray-50 px-3 py-2 rounded">
-                <span className="font-medium">Manager</span>
-                <span>sara@company.com / Manager@123</span>
-              </div>
-              <div className="flex justify-between bg-gray-50 px-3 py-2 rounded">
-                <span className="font-medium">Employee</span>
-                <span>john@company.com / Employee@123</span>
-              </div>
-            </div>
+          <div className="mt-6 pt-5 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-400 italic leading-relaxed">
+              "Our people are our strength — every individual valued, every contribution recognised."
+            </p>
+            <p className="text-xs text-brand-600 font-semibold mt-2 tracking-wide uppercase">Kinetics Group</p>
           </div>
         </div>
       </div>
