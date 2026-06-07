@@ -19,7 +19,16 @@ app.use('/api/personal-time',         require('./routes/personalTime'));
 app.use('/api/reports',               require('./routes/reports'));
 app.use('/api/admin',                 require('./routes/admin'));
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+app.get('/api/health', (_, res) => {
+  try {
+    const db = require('./db/database');
+    const empCount = db.prepare('SELECT COUNT(*) as c FROM employees').get();
+    const polCount = db.prepare('SELECT COUNT(*) as c FROM leave_policies').get();
+    res.json({ status: 'ok', ts: new Date().toISOString(), employees: empCount?.c, policies: polCount?.c });
+  } catch(e) {
+    res.json({ status: 'ok', ts: new Date().toISOString(), dbError: e.message });
+  }
+});
 
 // One-time seed endpoint — safe to call multiple times (uses INSERT OR IGNORE)
 app.post('/api/seed', (req, res) => {
