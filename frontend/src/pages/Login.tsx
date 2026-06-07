@@ -25,21 +25,21 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-800 to-brand-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-5">
             <img
               src="/logo.png"
               alt="Kinetics Group"
-              className="h-16 object-contain drop-shadow-lg"
+              className="h-24 object-contain"
             />
           </div>
-          <h1 className="text-2xl font-bold text-white">HR Leave System</h1>
-          <p className="text-blue-200 mt-1">Sign in to manage your leaves</p>
+          <h1 className="text-2xl font-bold text-gray-800">HR Leave System</h1>
+          <p className="text-gray-500 mt-1">Sign in to manage your leaves</p>
         </div>
 
-        <div className="card">
+        <div className="card shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="label">Email address</label>
@@ -77,7 +77,7 @@ export default function Login() {
           </form>
 
           <div className="mt-6 pt-5 border-t border-gray-100">
-            <p className="text-xs text-gray-400 font-medium mb-3">Demo credentials</p>
+            <p className="text-xs text-gray-500 font-medium mb-3">Demo credentials</p>
             <div className="space-y-1.5 text-xs text-gray-500">
               <div className="flex justify-between bg-gray-50 px-3 py-2 rounded">
                 <span className="font-medium">HR Admin</span>
