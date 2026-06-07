@@ -21,6 +21,16 @@ app.use('/api/admin',                 require('./routes/admin'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
+// One-time seed endpoint — safe to call multiple times (uses INSERT OR IGNORE)
+app.post('/api/seed', (req, res) => {
+  try {
+    require('./db/seed');
+    res.json({ message: 'Seed complete' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve built frontend
 const distPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(distPath));
