@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 4000;
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
 
+app.use('/api/debug',                 require('./routes/debug'));
 app.use('/api/auth',                  require('./routes/auth'));
 app.use('/api/employees',             require('./routes/employees'));
 app.use('/api/employees/:id/family',  require('./routes/family'));
