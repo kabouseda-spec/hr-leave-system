@@ -1,0 +1,8 @@
+
+========================================
+  PUBLIC URL: https://happy-kangaroo-13.loca.lt
+========================================
+
+Share this link with anyone on any device.
+Keep this process running to stay accessible.
+Tunnel error: connection refused: localtunnel.me:11933 (check your firewall settings)

@@ -1,0 +1,46 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const engine = require('./services/leaveEngine');
+const { runReminders } = require('./services/reminderEngine');
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+app.use(express.json());
+
+app.use('/api/auth',                  require('./routes/auth'));
+app.use('/api/employees',             require('./routes/employees'));
+app.use('/api/employees/:id/family',  require('./routes/family'));
+app.use('/api/leaves',                require('./routes/leaves'));
+app.use('/api/personal-time',         require('./routes/personalTime'));
+app.use('/api/reports',               require('./routes/reports'));
+app.use('/api/admin',                 require('./routes/admin'));
+
+app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+
+// Serve built frontend
+const distPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(distPath));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 HR Leave API running on http://localhost:${PORT}`);
+
+  // Run all reminders on startup then every 24 hours
+  const runAllReminders = () => {
+    try { engine.checkVisaReminders(); } catch(e) {}
+    try { runReminders(); } catch(e) {}
+  };
+  runAllReminders();
+  setInterval(runAllReminders, 24 * 60 * 60 * 1000);
+});
