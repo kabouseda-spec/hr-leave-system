@@ -36,6 +36,17 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 HR Leave API running on http://localhost:${PORT}`);
 
+  // Auto-seed if database is empty
+  try {
+    const db = require('./db/database');
+    const empCount = db.prepare('SELECT COUNT(*) as c FROM employees').get();
+    if (empCount.c === 0) {
+      console.log('📦 Empty database detected — running seed...');
+      require('./db/seed');
+      console.log('✅ Seed complete');
+    }
+  } catch(e) { console.error('Seed error:', e.message); }
+
   // Run all reminders on startup then every 24 hours
   const runAllReminders = () => {
     try { engine.checkVisaReminders(); } catch(e) {}
