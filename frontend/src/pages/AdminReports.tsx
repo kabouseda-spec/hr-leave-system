@@ -17,7 +17,10 @@ interface ReportRow {
     pending: number;
   }>;
   noSickLeaveBonus: boolean;
-  gratuity: { eligible: boolean; amount: number; yearsWorked: number };
+  gratuity: {
+    eligible: boolean; amount: number; rawAmount?: number; yearsWorked: number; fullYears?: number;
+    tier?: string; breakdown?: string; capped?: boolean; cap?: number; dailyRate?: number; basicSalary?: number;
+  };
 }
 
 export default function AdminReports() {
