@@ -95,19 +95,34 @@ router.post('/', auth, (req, res) => {
   ensureBalance(employee.id, leave_type, rollover.year, rollover.periodStart, rollover.periodEnd, allocated);
 
   const id = uuidv4();
-  db.prepare(`INSERT INTO leave_requests
-    (id,employee_id,leave_type,sub_type,start_date,end_date,total_days,hours,paid_days,half_pay_days,unpaid_days,reason,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending')`)
-    .run(id, employee.id, leave_type, n(sub_type), start_date, end, result.totalDays,
-         n(hours), result.paid, result.halfPay, result.unpaid, n(reason));
+  // Sick leave auto-approves — no manager action needed
+  const autoApprove = leave_type === 'sick';
+  const initialStatus = autoApprove ? 'approved' : 'pending';
 
-  // Update pending in balance
-  db.prepare(`UPDATE leave_balances SET pending=pending+?, updated_at=datetime('now')
-    WHERE employee_id=? AND leave_type=? AND year=?`)
-    .run(result.totalDays, employee.id, leave_type, rollover.year);
+  db.prepare(`INSERT INTO leave_requests
+    (id,employee_id,leave_type,sub_type,start_date,end_date,total_days,hours,paid_days,half_pay_days,unpaid_days,reason,status,approved_by,approved_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, employee.id, leave_type, n(sub_type), start_date, end, result.totalDays,
+         n(hours), result.paid, result.halfPay, result.unpaid, n(reason),
+         initialStatus,
+         autoApprove ? employee.id : null,
+         autoApprove ? `datetime('now')` : null);
+
+  if (autoApprove) {
+    // Directly commit balance for sick leave
+    db.prepare(`UPDATE leave_balances SET
+      used_paid=used_paid+?, used_half=used_half+?, used_unpaid=used_unpaid+?,
+      updated_at=datetime('now') WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(result.paid, result.halfPay, result.unpaid, employee.id, leave_type, rollover.year);
+  } else {
+    // Mark as pending in balance
+    db.prepare(`UPDATE leave_balances SET pending=pending+?, updated_at=datetime('now')
+      WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(result.totalDays, employee.id, leave_type, rollover.year);
+  }
 
   // Notify manager
-  if (employee.manager_id) {
+  if (employee.manager_id && !autoApprove) {
     db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
       .run(uuidv4(), employee.manager_id,
           `📋 ${employee.full_name} requested ${leave_type} leave from ${start_date} to ${end}.`, 'leave_request');

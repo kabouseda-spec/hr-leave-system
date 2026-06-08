@@ -217,14 +217,14 @@ router.patch('/:id/balances/:leaveType', auth, rbac('hr_admin'), (req, res) => {
 router.patch('/me/personal', auth, (req, res) => {
   const { date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary } = req.body;
   db.prepare(`UPDATE employees SET
-    date_of_birth = COALESCE(?, date_of_birth),
-    spouse_name = COALESCE(?, spouse_name),
-    spouse_dob = COALESCE(?, spouse_dob),
-    spouse_in_uae = COALESCE(?, spouse_in_uae),
-    marriage_anniversary = COALESCE(?, marriage_anniversary),
+    date_of_birth = ?,
+    spouse_name = ?,
+    spouse_dob = ?,
+    spouse_in_uae = ?,
+    marriage_anniversary = ?,
     updated_at = datetime('now')
     WHERE id = ?`)
-    .run(n(date_of_birth), n(spouse_name), n(spouse_dob), n(marriage_anniversary), req.user.id);
+    .run(n(date_of_birth), n(spouse_name), n(spouse_dob), spouse_in_uae ? 1 : 0, n(marriage_anniversary), req.user.id);
   res.json({ message: 'Personal info updated' });
 });
 

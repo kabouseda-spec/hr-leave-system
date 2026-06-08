@@ -43,7 +43,6 @@ export default function Approvals() {
   };
 
   const reject = async (id: string) => {
-    if (!rejectionReason.trim()) return;
     setActionId(id);
     try {
       await api.patch(`/leaves/${id}/reject`, { rejection_reason: rejectionReason });
@@ -167,7 +166,7 @@ export default function Approvals() {
                     <button
                       className="btn-danger py-1.5"
                       onClick={() => reject(r.id)}
-                      disabled={!rejectionReason.trim() || actionId === r.id}
+                      disabled={actionId === r.id}
                     >
                       Confirm Rejection
                     </button>
