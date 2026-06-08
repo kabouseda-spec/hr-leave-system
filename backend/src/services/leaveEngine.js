@@ -422,15 +422,58 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
 }
 
 // ── Gratuity ──────────────────────────────────────────────────────────────────
+// Based on UAE Labour Law + company policy:
+// < 1 year      : No gratuity
+// 1 – 5 years   : 21 days' basic salary × years worked
+// > 5 years     : (21 days × 5 years) + (30 days × additional years)
+// Maximum cap   : 2 years' total wage (24 × basic monthly salary)
 function calculateGratuity(employee) {
-  const yearsWorked = dayjs().diff(dayjs(employee.hire_date), 'year', true);
-  if (yearsWorked < 1) return { eligible: false, amount: 0 };
-  const dailyWage = employee.basic_salary / 30;
-  let gratuity = yearsWorked <= 5
-    ? dailyWage * 21 * yearsWorked
-    : (dailyWage * 21 * 5) + (dailyWage * 30 * (yearsWorked - 5));
-  gratuity = Math.min(gratuity, employee.basic_salary * 24);
-  return { eligible: true, amount: Math.round(gratuity * 100) / 100, yearsWorked };
+  const yearsWorked     = dayjs().diff(dayjs(employee.hire_date), 'year', true);
+  const fullYears       = Math.floor(yearsWorked);
+  const basicSalary     = employee.basic_salary || 0;
+  const dailyRate       = Math.round((basicSalary / 30) * 100) / 100;
+  const cap             = Math.round(basicSalary * 24 * 100) / 100; // 2 years' salary
+
+  if (yearsWorked < 1) {
+    return {
+      eligible: false, amount: 0, yearsWorked,
+      tier: 'none', breakdown: 'Less than 1 year of service — no gratuity entitlement.',
+      dailyRate, basicSalary, cap,
+    };
+  }
+
+  let gratuity, tier, breakdown;
+
+  if (yearsWorked <= 5) {
+    // Tier 1: 21 days per year
+    gratuity = dailyRate * 21 * yearsWorked;
+    tier = '1-5 years';
+    breakdown = `21 days × AED ${dailyRate}/day × ${yearsWorked.toFixed(2)} years`;
+  } else {
+    // Tier 2: 21 days × 5 years + 30 days × additional years
+    const first5     = dailyRate * 21 * 5;
+    const additional = dailyRate * 30 * (yearsWorked - 5);
+    gratuity = first5 + additional;
+    tier = 'over 5 years';
+    breakdown = `(21 days × AED ${dailyRate}/day × 5 years) + (30 days × AED ${dailyRate}/day × ${(yearsWorked - 5).toFixed(2)} years)`;
+  }
+
+  const capped      = gratuity > cap;
+  const finalAmount = Math.round(Math.min(gratuity, cap) * 100) / 100;
+
+  return {
+    eligible: true,
+    amount: finalAmount,
+    rawAmount: Math.round(gratuity * 100) / 100,
+    yearsWorked,
+    fullYears,
+    tier,
+    breakdown,
+    capped,
+    cap,
+    dailyRate,
+    basicSalary,
+  };
 }
 
 // ── Basic salary percentage ───────────────────────────────────────────────────

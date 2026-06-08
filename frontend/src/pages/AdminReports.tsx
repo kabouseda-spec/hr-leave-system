@@ -132,34 +132,72 @@ export default function AdminReports() {
           </table>
         </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <div className="space-y-4">
+          {/* Gratuity policy reference */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+            <p className="font-semibold mb-2">📋 Gratuity Entitlement — UAE Labour Law</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-white rounded-lg p-2 border border-blue-100"><span className="text-gray-500">Less than 1 year:</span> <span className="font-medium">No gratuity</span></div>
+              <div className="bg-white rounded-lg p-2 border border-blue-100"><span className="text-gray-500">1–5 years:</span> <span className="font-medium">21 days' basic salary × years</span></div>
+              <div className="bg-white rounded-lg p-2 border border-blue-100"><span className="text-gray-500">Over 5 years:</span> <span className="font-medium">(21 days × 5 yrs) + (30 days × extra yrs)</span></div>
+              <div className="bg-white rounded-lg p-2 border border-blue-100"><span className="text-gray-500">Maximum cap:</span> <span className="font-medium text-red-600">2 years' total wage</span></div>
+            </div>
+            <p className="text-xs text-blue-600 mt-2">⚠️ Gratuity is calculated on <strong>Basic Salary only</strong> — not HRA or other allowances.</p>
+          </div>
+
+          <div className="card p-0 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Name', 'Department', 'Hire Date', 'Years', 'Eligible', 'Gratuity (AED)'].map(h => (
+                {['Name', 'Department', 'Hire Date', 'Years', 'Basic Salary', 'Daily Rate', 'Tier', 'Calculation', 'Gratuity (AED)', 'Capped?'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {report.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{r.full_name}</td>
-                  <td className="px-4 py-3 text-gray-600">{r.department}</td>
-                  <td className="px-4 py-3 text-gray-600">{dayjs(r.hire_date).format('D MMM YYYY')}</td>
-                  <td className="px-4 py-3">{r.gratuity.yearsWorked?.toFixed(1) ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    {r.gratuity.eligible
-                      ? <span className="badge-approved">Eligible</span>
-                      : <span className="badge-cancelled">Not yet</span>}
-                  </td>
-                  <td className="px-4 py-3 font-semibold">
-                    {r.gratuity.eligible ? r.gratuity.amount.toLocaleString('en-AE', { minimumFractionDigits: 2 }) : '—'}
-                  </td>
-                </tr>
-              ))}
+              {report.map(r => {
+                const g = r.gratuity;
+                return (
+                  <tr key={r.id} className={`hover:bg-gray-50 ${!g.eligible ? 'opacity-60' : ''}`}>
+                    <td className="px-4 py-3 font-medium whitespace-nowrap">{r.full_name}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.department}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{dayjs(r.hire_date).format('D MMM YYYY')}</td>
+                    <td className="px-4 py-3 font-medium">{g.yearsWorked?.toFixed(2) ?? '—'}</td>
+                    <td className="px-4 py-3 text-green-700 font-medium">
+                      {g.basicSalary ? `AED ${g.basicSalary.toLocaleString()}` : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {g.dailyRate ? `AED ${g.dailyRate.toLocaleString()}` : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {g.eligible
+                        ? <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${g.tier === 'over 5 years' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {g.tier}
+                          </span>
+                        : <span className="badge-cancelled">Not eligible</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">{g.breakdown || '—'}</td>
+                    <td className="px-4 py-3">
+                      {g.eligible ? (
+                        <div>
+                          <p className="font-bold text-gray-900">AED {g.amount.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</p>
+                          {g.capped && (
+                            <p className="text-xs text-red-500">⚠️ Capped at AED {g.cap?.toLocaleString()}</p>
+                          )}
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {g.capped
+                        ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Yes</span>
+                        : <span className="text-xs text-gray-400">No</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
