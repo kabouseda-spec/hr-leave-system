@@ -56,7 +56,7 @@ const BLANK_FORM = {
   role: 'employee', department: 'Engineering',
   hire_date: dayjs().format('YYYY-MM-DD'),
   probation_end_date: dayjs().add(6, 'month').format('YYYY-MM-DD'),
-  basic_salary: '', manager_id: '',
+  basic_salary: '', hra: '', other_allowance: '', manager_id: '',
   passport_number: '', passport_expiry: '',
   visa_number: '', visa_type: 'Employment', visa_expiry: '', visa_country: 'UAE',
   end_of_service_date: '',
@@ -98,7 +98,7 @@ export default function AdminEmployees() {
         employee_number: full.employee_number, full_name: full.full_name,
         email: full.email, password: '', role: full.role, department: full.department,
         hire_date: full.hire_date, probation_end_date: full.probation_end_date || '',
-        basic_salary: String(full.basic_salary), manager_id: full.manager_id || '',
+        basic_salary: String(full.basic_salary || 0), hra: String(full.hra || 0), other_allowance: String(full.other_allowance || 0), manager_id: full.manager_id || '',
         passport_number: full.passport_number || '', passport_expiry: full.passport_expiry || '',
         visa_number: full.visa_number || '', visa_type: full.visa_type || 'Employment',
         visa_expiry: full.visa_expiry || '', visa_country: full.visa_country || 'UAE',
@@ -120,6 +120,7 @@ export default function AdminEmployees() {
         visa_number: emp.visa_number || '', visa_type: emp.visa_type || 'Employment',
         visa_expiry: emp.visa_expiry || '', visa_country: 'UAE',
         end_of_service_date: emp.end_of_service_date || '',
+        hra: '0', other_allowance: '0',
         date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '',
       });
     }
@@ -367,9 +368,26 @@ export default function AdminEmployees() {
                       <label className="label">Probation End Date</label>
                       <input type="date" className="input" value={form.probation_end_date} onChange={e => setForm(f => ({ ...f, probation_end_date: e.target.value }))} />
                     </div>
+                    <div className="col-span-2">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 pt-1">Salary Breakdown (AED)</p>
+                    </div>
                     <div>
-                      <label className="label">Basic Salary (AED)</label>
+                      <label className="label">Basic Salary</label>
                       <input type="number" className="input" value={form.basic_salary} onChange={e => setForm(f => ({ ...f, basic_salary: e.target.value }))} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <label className="label">HRA (Housing Allowance)</label>
+                      <input type="number" className="input" value={form.hra} onChange={e => setForm(f => ({ ...f, hra: e.target.value }))} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <label className="label">Other Allowances</label>
+                      <input type="number" className="input" value={form.other_allowance} onChange={e => setForm(f => ({ ...f, other_allowance: e.target.value }))} placeholder="0.00" />
+                    </div>
+                    <div>
+                      <label className="label">Full Salary (Total)</label>
+                      <div className="input bg-gray-50 text-gray-700 font-semibold">
+                        AED {((parseFloat(form.basic_salary)||0) + (parseFloat(form.hra)||0) + (parseFloat(form.other_allowance)||0)).toLocaleString()}
+                      </div>
                     </div>
                     <div>
                       <label className="label">Manager</label>

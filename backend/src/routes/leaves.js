@@ -10,6 +10,7 @@ const rbac = require('../middleware/rbac');
 const engine = require('../services/leaveEngine');
 
 const n = v => (v === undefined ? null : v);
+const { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail } = require('../services/emailService');
 
 // ── File upload (medical certificates) ───────────────────────────────────────
 const storage = multer.diskStorage({
@@ -121,11 +122,26 @@ router.post('/', auth, (req, res) => {
       .run(result.totalDays, employee.id, leave_type, rollover.year);
   }
 
-  // Notify manager
+  // Notify manager (in-app + email)
   if (employee.manager_id && !autoApprove) {
     db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
       .run(uuidv4(), employee.manager_id,
           `📋 ${employee.full_name} requested ${leave_type} leave from ${start_date} to ${end}.`, 'leave_request');
+
+    // Email the manager
+    const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(employee.manager_id);
+    if (manager?.email) {
+      const tpl = leaveRequestEmail({
+        managerName: manager.full_name,
+        employeeName: employee.full_name,
+        leaveType: leave_type,
+        startDate: start_date,
+        endDate: end,
+        totalDays: result.totalDays,
+        reason: reason || '',
+      });
+      sendEmail({ to: manager.email, ...tpl });
+    }
   }
 
   // Personal time: also update period balance
@@ -194,6 +210,21 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
   db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)')
     .run(uuidv4(), req.user.id, 'approve', 'leave_request', row.id);
 
+  // Email the employee
+  const empApprove = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(row.employee_id);
+  const approver   = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
+  if (empApprove?.email) {
+    const tpl = leaveApprovedEmail({
+      employeeName: empApprove.full_name,
+      leaveType: row.leave_type,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      totalDays: row.total_days,
+      approvedByName: approver?.full_name || 'Your Manager',
+    });
+    sendEmail({ to: empApprove.email, ...tpl });
+  }
+
   res.json({ message: 'Approved' });
 });
 
@@ -218,6 +249,21 @@ router.patch('/:id/reject', auth, rbac('manager', 'hr_admin'), (req, res) => {
   db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
     .run(uuidv4(), row.employee_id,
         `❌ Your ${row.leave_type} leave (${row.start_date} – ${row.end_date}) was rejected.${rejection_reason ? ' Reason: ' + rejection_reason : ''}`, 'leave_rejected');
+
+  // Email the employee
+  const empReject = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(row.employee_id);
+  const rejector  = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
+  if (empReject?.email) {
+    const tpl = leaveRejectedEmail({
+      employeeName: empReject.full_name,
+      leaveType: row.leave_type,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      rejectionReason: rejection_reason || '',
+      rejectedByName: rejector?.full_name || 'Your Manager',
+    });
+    sendEmail({ to: empReject.email, ...tpl });
+  }
 
   res.json({ message: 'Rejected' });
 });

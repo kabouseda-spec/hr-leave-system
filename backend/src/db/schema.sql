@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS employees (
   end_of_service_date   TEXT,
   is_active             INTEGER NOT NULL DEFAULT 1,
   basic_salary          REAL NOT NULL DEFAULT 0,
+  hra                   REAL NOT NULL DEFAULT 0,
+  other_allowance       REAL NOT NULL DEFAULT 0,
   -- Personal / family
   date_of_birth         TEXT,
   spouse_name           TEXT,

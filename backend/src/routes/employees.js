@@ -38,7 +38,7 @@ router.get('/', auth, rbac('hr_admin', 'manager'), (req, res) => {
 router.post('/', auth, rbac('hr_admin'), (req, res) => {
   const {
     employee_number, full_name, email, password, role,
-    department, manager_id, hire_date, probation_end_date, basic_salary,
+    department, manager_id, hire_date, probation_end_date, basic_salary, hra, other_allowance,
     passport_number, passport_expiry, visa_number, visa_type, visa_expiry, visa_country,
     date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;
@@ -55,13 +55,13 @@ router.post('/', auth, rbac('hr_admin'), (req, res) => {
     db.prepare(`
       INSERT INTO employees
       (id,employee_number,full_name,email,password_hash,role,department,manager_id,
-       hire_date,rollover_month,probation_end_date,basic_salary,
+       hire_date,rollover_month,probation_end_date,basic_salary,hra,other_allowance,
        passport_number,passport_expiry,visa_number,visa_type,visa_expiry,visa_country,
        date_of_birth,spouse_name,spouse_dob,marriage_anniversary)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(id, employee_number, full_name, email.toLowerCase(), hash, role,
            department, n(manager_id), hire_date, rollover_month,
-           n(probation_end_date), basic_salary || 0,
+           n(probation_end_date), basic_salary || 0, hra || 0, other_allowance || 0,
            n(passport_number), n(passport_expiry),
            n(visa_number), n(visa_type), n(visa_expiry), visa_country || 'UAE',
            n(date_of_birth), n(spouse_name), n(spouse_dob), n(marriage_anniversary));
@@ -135,6 +135,8 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     rollover_month = ?,
     probation_end_date = COALESCE(?, probation_end_date),
     basic_salary = COALESCE(?, basic_salary),
+    hra = COALESCE(?, hra),
+    other_allowance = COALESCE(?, other_allowance),
     is_active = COALESCE(?, is_active),
     passport_number = COALESCE(?, passport_number),
     passport_expiry = COALESCE(?, passport_expiry),
@@ -151,7 +153,7 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     updated_at = datetime('now')
     WHERE id = ?`).run(
     n(full_name), n(role), n(department), n(manager_id), n(hire_date), rollover_month,
-    n(probation_end_date), n(basic_salary), effectiveIsActive,
+    n(probation_end_date), n(basic_salary), n(hra), n(other_allowance), effectiveIsActive,
     n(passport_number), n(passport_expiry), n(visa_number), n(visa_type), n(visa_expiry), n(visa_country),
     n(end_of_service_date), n(date_of_birth), n(spouse_name), n(spouse_dob), spouse_in_uae ? 1 : 0, n(marriage_anniversary),
     req.params.id,

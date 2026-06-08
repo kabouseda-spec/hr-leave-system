@@ -21,6 +21,8 @@ const migrations = [
   "ALTER TABLE employees ADD COLUMN spouse_name TEXT",
   "ALTER TABLE employees ADD COLUMN spouse_dob TEXT",
   "ALTER TABLE employees ADD COLUMN spouse_in_uae INTEGER DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN hra REAL DEFAULT 0",
+  "ALTER TABLE employees ADD COLUMN other_allowance REAL DEFAULT 0",
   "ALTER TABLE employees ADD COLUMN marriage_anniversary TEXT",
   "ALTER TABLE employees ADD COLUMN passport_number TEXT",
   "ALTER TABLE employees ADD COLUMN passport_expiry TEXT",
