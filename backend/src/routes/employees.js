@@ -113,7 +113,7 @@ router.get('/:id', auth, (req, res) => {
 router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
   const {
     full_name, role, department, manager_id, hire_date, probation_end_date,
-    basic_salary, is_active, passport_number, passport_expiry,
+    basic_salary, hra, other_allowance, is_active, passport_number, passport_expiry,
     visa_number, visa_type, visa_expiry, visa_country, end_of_service_date,
     date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;

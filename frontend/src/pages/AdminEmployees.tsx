@@ -86,10 +86,12 @@ export default function AdminEmployees() {
 
   const openCreate = () => { setForm({ ...BLANK_FORM }); setEditing(null); setFamilyMembers([]); setActiveTab('info'); setShowForm(true); };
   const openEdit = async (emp: Employee) => {
+    // Reset form to blank first so no stale data shows while loading
+    setForm({ ...BLANK_FORM });
+    setFamilyMembers([]);
     setEditing(emp);
     setActiveTab('info');
     setShowForm(true);
-    setFamilyMembers([]);
 
     // Fetch full employee record (includes all fields like date_of_birth, spouse_dob etc.)
     try {
