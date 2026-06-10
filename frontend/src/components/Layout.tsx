@@ -57,7 +57,6 @@ export default function Layout() {
           <NavItem to="/leave/request" icon={DocumentPlusIcon} label="Request Leave" />
           <NavItem to="/leave/history" icon={CalendarDaysIcon} label="My Leaves" />
           <NavItem to="/personal-time" icon={ClockIcon} label="Personal Time" />
-          <NavItem to="/payslip" icon={PayslipIcon} label="My Payslip" />
           <NavItem to="/calendar" icon={CalendarDaysIcon} label="Team Calendar" />
 
           {(user?.role === 'manager' || user?.role === 'hr_admin') && (
@@ -85,6 +84,7 @@ export default function Layout() {
         </nav>
 
         <div className="p-4 border-t border-brand-700 space-y-1">
+          <NavItem to="/payslip" icon={PayslipIcon} label="My Payslip" />
           <NavItem to="/profile" icon={UserCircleIcon} label={user?.name || 'Profile'} />
           <button
             onClick={handleLogout}
