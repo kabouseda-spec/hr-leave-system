@@ -35,4 +35,16 @@ router.delete('/employee/:email', auth, rbac('hr_admin'), (req, res) => {
   }
 });
 
+// HR Admin only — test email connection
+router.post('/test-email', auth, rbac('hr_admin'), async (req, res) => {
+  const { sendEmail } = require('../services/emailService');
+  const to = req.body.to || req.user.email;
+  await sendEmail({
+    to,
+    subject: '✅ HR System — Email Test',
+    html: `<div style="font-family:Arial;padding:20px"><h2>Email is working!</h2><p>This is a test from the Kinetics Group HR Leave System.</p><p>Sent at: ${new Date().toISOString()}</p></div>`,
+  });
+  res.json({ message: `Test email sent to ${to}. Check inbox (and spam folder).` });
+});
+
 module.exports = router;
