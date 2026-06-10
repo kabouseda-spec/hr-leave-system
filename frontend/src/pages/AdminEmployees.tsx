@@ -2,6 +2,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
 import { PlusIcon, XMarkIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 interface Employee {
   id: string;
@@ -64,6 +65,7 @@ const BLANK_FORM = {
 };
 
 export default function AdminEmployees() {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -145,6 +147,22 @@ export default function AdminEmployees() {
     if (!editing) return;
     await api.delete(`/employees/${editing.id}/family/${memberId}`);
     setFamilyMembers(prev => prev.filter(m => m.id !== memberId));
+  };
+
+  const deleteEmployee = async () => {
+    if (!editing) return;
+    const confirmed = confirm(
+      `⚠️ PERMANENTLY DELETE ${editing.full_name}?\n\nThis will remove their entire profile, leave history, and all data. This CANNOT be undone.\n\nType OK to confirm.`
+    );
+    if (!confirmed) return;
+    try {
+      const res = await api.delete(`/employees/${editing.id}`);
+      alert(res.data.message);
+      setShowForm(false);
+      load();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to delete employee');
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -597,6 +615,18 @@ export default function AdminEmployees() {
               {error && <p className="px-5 text-red-600 text-sm flex-shrink-0">{error}</p>}
 
               <div className="flex gap-3 p-5 border-t border-gray-100 flex-shrink-0">
+                {/* Delete button — HR Admin only, editing only */}
+                {editing && user?.role === 'hr_admin' && (
+                  <button
+                    type="button"
+                    onClick={deleteEmployee}
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                    title="Permanently delete this employee"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                    Delete
+                  </button>
+                )}
                 <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" className="btn-primary flex-1 justify-center" disabled={submitting}>
                   {submitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Employee'}

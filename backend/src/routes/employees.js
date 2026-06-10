@@ -230,6 +230,28 @@ router.patch('/me/personal', auth, (req, res) => {
   res.json({ message: 'Personal info updated' });
 });
 
+// HR Admin only — permanently delete an employee and all their data
+router.delete('/:id', auth, rbac('hr_admin'), (req, res) => {
+  const emp = db.prepare('SELECT id, full_name, email FROM employees WHERE id = ?').get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  // Prevent deleting yourself
+  if (emp.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
+
+  db.prepare('DELETE FROM leave_requests WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM leave_balances WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM personal_time_log WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM personal_time_balances WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM family_members WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM notifications WHERE employee_id = ?').run(emp.id);
+  db.prepare('DELETE FROM employees WHERE id = ?').run(emp.id);
+
+  db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id,new_value) VALUES (?,?,?,?,?,?)')
+    .run(uuidv4(), req.user.id, 'delete_employee', 'employee', emp.id, JSON.stringify({ email: emp.email, name: emp.full_name }));
+
+  res.json({ message: `${emp.full_name} has been permanently deleted.` });
+});
+
 // Department list
 router.get('/meta/departments', auth, (req, res) => res.json(DEPARTMENTS));
 
