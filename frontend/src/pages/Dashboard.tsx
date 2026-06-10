@@ -189,6 +189,7 @@ export default function Dashboard() {
   const [showPolicy, setShowPolicy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -196,7 +197,8 @@ export default function Dashboard() {
       api.get('/leaves'),
       user!.role !== 'employee' ? api.get('/leaves?status=pending') : Promise.resolve({ data: [] }),
       api.get('/reports/notifications'),
-    ]).then(([balRes, leavesRes, pendingRes, notifRes]) => {
+      api.get(`/admin/holidays?year=${dayjs().year()}`),
+    ]).then(([balRes, leavesRes, pendingRes, notifRes, holRes]) => {
       const { balances: b, rollover: r } = balRes.data;
       // Show annual, sick, personal + unpaid on dashboard
       const shown = (Array.isArray(b) ? b : []).filter((bal: Balance) =>
@@ -207,6 +209,12 @@ export default function Dashboard() {
       setRecentLeaves(leavesRes.data.slice(0, 5));
       setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
       setNotifications(notifRes.data.filter((n: any) => !n.read).slice(0, 3));
+      // Upcoming holidays (next 60 days)
+      const today = dayjs();
+      const upcoming = (holRes.data || []).filter((h: any) =>
+        dayjs(h.date).isAfter(today) && dayjs(h.date).diff(today, 'day') <= 60
+      ).slice(0, 5);
+      setHolidays(upcoming);
     }).finally(() => setLoading(false));
   }, [user]);
 
@@ -302,6 +310,33 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Upcoming holidays */}
+        {holidays.length > 0 && (
+          <div>
+            <h2 className="text-base font-semibold text-gray-700 mb-3">🎉 Upcoming Public Holidays</h2>
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+              {holidays.map((h: any) => (
+                <div key={h.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-50 last:border-0 hover:bg-amber-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="text-xl">🏖️</div>
+                    <div>
+                      <p className="font-medium text-sm text-gray-900">{h.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {h.end_date && h.end_date !== h.date
+                          ? `${dayjs(h.date).format('D MMM')} – ${dayjs(h.end_date).format('D MMM YYYY')}`
+                          : dayjs(h.date).format('dddd, D MMMM YYYY')}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                    {dayjs(h.date).diff(dayjs(), 'day')} days away
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recent requests */}
         <div>

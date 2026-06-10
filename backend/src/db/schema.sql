@@ -33,8 +33,17 @@ CREATE TABLE IF NOT EXISTS employees (
   visa_type             TEXT,
   visa_expiry           TEXT,
   visa_country          TEXT DEFAULT 'UAE',
+  visa_issuing_company  TEXT,
   visa_reminder_sent_90 INTEGER DEFAULT 0,
   visa_reminder_sent_30 INTEGER DEFAULT 0,
+  -- Labour card
+  labor_card_number     TEXT,
+  labor_card_expiry     TEXT,
+  -- Temporary work permit
+  temp_work_permit      INTEGER DEFAULT 0,
+  temp_work_permit_date TEXT,
+  temp_work_permit_expiry TEXT,
+  temp_work_permit_company TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -48,6 +57,7 @@ CREATE TABLE IF NOT EXISTS family_members (
   relationship  TEXT NOT NULL CHECK(relationship IN ('child','sibling','parent','other')),
   name          TEXT NOT NULL,
   date_of_birth TEXT,
+  gender        TEXT CHECK(gender IN ('male','female','other')),
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -101,6 +111,7 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   employee_id        TEXT NOT NULL REFERENCES employees(id),
   leave_type         TEXT NOT NULL,
   sub_type           TEXT,
+  is_half_day        INTEGER DEFAULT 0,
   start_date         TEXT NOT NULL,
   end_date           TEXT NOT NULL,
   total_days         REAL NOT NULL DEFAULT 0,

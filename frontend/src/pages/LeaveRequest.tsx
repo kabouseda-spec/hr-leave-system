@@ -28,7 +28,7 @@ interface Preview {
 export default function LeaveRequest() {
   const navigate = useNavigate();
   const [policies, setPolicies] = useState<Policy[]>([]);
-  const [form, setForm] = useState({ leave_type: 'annual', start_date: '', end_date: '', hours: '', reason: '', sub_type: '' });
+  const [form, setForm] = useState({ leave_type: 'annual', start_date: '', end_date: '', hours: '', reason: '', sub_type: '', is_half_day: false });
   const [certFile, setCertFile] = useState<File | null>(null);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -65,6 +65,7 @@ export default function LeaveRequest() {
         end_date: form.end_date || form.start_date,
         hours: form.hours || undefined,
         sub_type: form.sub_type || undefined,
+        is_half_day: form.is_half_day,
       }).then(r => setPreview(r.data)).catch(() => setPreview(null))
         .finally(() => setPreviewLoading(false));
     }, 450);
@@ -83,6 +84,7 @@ export default function LeaveRequest() {
         hours: form.hours || undefined,
         reason: form.reason,
         sub_type: form.sub_type || undefined,
+        is_half_day: form.is_half_day,
       });
       // Upload certificate if attached
       if (certFile && res.data.id) {
@@ -173,6 +175,18 @@ export default function LeaveRequest() {
               <option value="grandparent">Grandparent (3 days)</option>
             </select>
             <p className="text-xs text-gray-400 mt-1">Days beyond the allocation will be classified as unpaid leave.</p>
+          </div>
+        )}
+
+        {/* Half-day option for annual and sick */}
+        {(form.leave_type === 'annual' || form.leave_type === 'sick') && !isHours && (
+          <div className="flex items-center gap-3 py-1">
+            <input type="checkbox" id="half_day" checked={form.is_half_day}
+              onChange={e => setForm(f => ({ ...f, is_half_day: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 cursor-pointer" />
+            <label htmlFor="half_day" className="text-sm font-medium text-gray-700 cursor-pointer">
+              Half-day leave (0.5 days)
+            </label>
           </div>
         )}
 

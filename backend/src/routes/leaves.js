@@ -70,7 +70,7 @@ router.get('/', auth, (req, res) => {
 
 // ── POST /leaves ──────────────────────────────────────────────────────────────
 router.post('/', auth, (req, res) => {
-  const { leave_type, start_date, end_date, hours, reason, sub_type } = req.body;
+  const { leave_type, start_date, end_date, hours, reason, sub_type, is_half_day } = req.body;
   if (!leave_type || !start_date) return res.status(400).json({ error: 'leave_type and start_date are required' });
 
   const employee = db.prepare('SELECT * FROM employees WHERE id=?').get(req.user.id);
@@ -79,7 +79,7 @@ router.post('/', auth, (req, res) => {
   const end = end_date || start_date;
   const result = engine.validateLeaveRequest({
     employee, leaveType: leave_type, startDate: start_date, endDate: end,
-    hours: parseFloat(hours) || null, subType: sub_type,
+    hours: parseFloat(hours) || null, subType: sub_type, isHalfDay: !!is_half_day,
   });
 
   if (!result.valid) {
@@ -101,13 +101,14 @@ router.post('/', auth, (req, res) => {
   const initialStatus = autoApprove ? 'approved' : 'pending';
 
   db.prepare(`INSERT INTO leave_requests
-    (id,employee_id,leave_type,sub_type,start_date,end_date,total_days,hours,paid_days,half_pay_days,unpaid_days,reason,status,approved_by,approved_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,employee_id,leave_type,sub_type,start_date,end_date,total_days,hours,paid_days,half_pay_days,unpaid_days,reason,status,approved_by,approved_at,is_half_day)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, employee.id, leave_type, n(sub_type), start_date, end, result.totalDays,
          n(hours), result.paid, result.halfPay, result.unpaid, n(reason),
          initialStatus,
          autoApprove ? employee.id : null,
-         autoApprove ? `datetime('now')` : null);
+         autoApprove ? `datetime('now')` : null,
+         is_half_day ? 1 : 0);
 
   if (autoApprove) {
     // Directly commit balance for sick leave
@@ -297,12 +298,12 @@ router.patch('/:id/cancel', auth, (req, res) => {
 
 // ── POST /leaves/validate ─────────────────────────────────────────────────────
 router.post('/validate', auth, (req, res) => {
-  const { leave_type, start_date, end_date, hours, sub_type } = req.body;
+  const { leave_type, start_date, end_date, hours, sub_type, is_half_day } = req.body;
   const employee = db.prepare('SELECT * FROM employees WHERE id=?').get(req.user.id);
   const result = engine.validateLeaveRequest({
     employee, leaveType: leave_type, startDate: start_date,
     endDate: end_date || start_date, hours: parseFloat(hours) || null,
-    subType: sub_type,
+    subType: sub_type, isHalfDay: !!is_half_day,
   });
   res.json(result);
 });

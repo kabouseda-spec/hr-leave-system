@@ -114,7 +114,9 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
   const {
     full_name, role, department, manager_id, hire_date, probation_end_date,
     basic_salary, hra, other_allowance, is_active, passport_number, passport_expiry,
-    visa_number, visa_type, visa_expiry, visa_country, end_of_service_date,
+    visa_number, visa_type, visa_expiry, visa_country, visa_issuing_company, end_of_service_date,
+    labor_card_number, labor_card_expiry,
+    temp_work_permit, temp_work_permit_date, temp_work_permit_expiry, temp_work_permit_company,
     date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;
 
@@ -144,6 +146,13 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     visa_type = COALESCE(?, visa_type),
     visa_expiry = COALESCE(?, visa_expiry),
     visa_country = COALESCE(?, visa_country),
+    visa_issuing_company = COALESCE(?, visa_issuing_company),
+    labor_card_number = COALESCE(?, labor_card_number),
+    labor_card_expiry = COALESCE(?, labor_card_expiry),
+    temp_work_permit = COALESCE(?, temp_work_permit),
+    temp_work_permit_date = COALESCE(?, temp_work_permit_date),
+    temp_work_permit_expiry = COALESCE(?, temp_work_permit_expiry),
+    temp_work_permit_company = COALESCE(?, temp_work_permit_company),
     end_of_service_date = COALESCE(?, end_of_service_date),
     date_of_birth = COALESCE(?, date_of_birth),
     spouse_name = COALESCE(?, spouse_name),
@@ -154,7 +163,9 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     WHERE id = ?`).run(
     n(full_name), n(role), n(department), n(manager_id), n(hire_date), rollover_month,
     n(probation_end_date), n(basic_salary), n(hra), n(other_allowance), effectiveIsActive,
-    n(passport_number), n(passport_expiry), n(visa_number), n(visa_type), n(visa_expiry), n(visa_country),
+    n(passport_number), n(passport_expiry), n(visa_number), n(visa_type), n(visa_expiry), n(visa_country), n(visa_issuing_company),
+    n(labor_card_number), n(labor_card_expiry),
+    temp_work_permit ? 1 : 0, n(temp_work_permit_date), n(temp_work_permit_expiry), n(temp_work_permit_company),
     n(end_of_service_date), n(date_of_birth), n(spouse_name), n(spouse_dob), spouse_in_uae ? 1 : 0, n(marriage_anniversary),
     req.params.id,
   );

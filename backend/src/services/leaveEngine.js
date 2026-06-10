@@ -248,23 +248,32 @@ function checkPersonalTimeBalance(employeeId, period, hoursRequested) {
 }
 
 // ── Salary Deduction Calculator ───────────────────────────────────────────────
-// UAE standard: basic_salary / 30 = daily rate
-function calculateDeduction(employee, unpaidDays, halfPayDays, hoursUnpaid) {
-  const basicSalary = employee.basic_salary || 0;
-  const dailyRate = basicSalary / 30;
-  const hourlyRate = dailyRate / 8;
+// Annual leave: full salary (basic + HRA + other) ÷ 22 working days
+// Sick leave:   full salary ÷ 30 calendar days
+// Personal time: basic salary ÷ 30 ÷ 8 per hour
+function calculateDeduction(employee, unpaidDays, halfPayDays, hoursUnpaid, leaveType) {
+  const basicSalary  = employee.basic_salary || 0;
+  const fullSalary   = basicSalary + (employee.hra || 0) + (employee.other_allowance || 0);
+
+  // Daily rate depends on leave type
+  const divisor  = leaveType === 'annual' ? 22 : 30;
+  const dailyRate  = Math.round((fullSalary / divisor) * 100) / 100;
+  const hourlyRate = Math.round((basicSalary / 30 / 8) * 100) / 100;
 
   const unpaidDeduction   = Math.round(dailyRate * (unpaidDays || 0) * 100) / 100;
   const halfPayDeduction  = Math.round((dailyRate / 2) * (halfPayDays || 0) * 100) / 100;
   const personalDeduction = Math.round(hourlyRate * (hoursUnpaid || 0) * 100) / 100;
   const total             = Math.round((unpaidDeduction + halfPayDeduction + personalDeduction) * 100) / 100;
 
-  return { dailyRate: Math.round(dailyRate * 100) / 100, hourlyRate: Math.round(hourlyRate * 100) / 100,
-           unpaidDeduction, halfPayDeduction, personalDeduction, total };
+  return {
+    dailyRate, hourlyRate, fullSalary,
+    divisor,
+    unpaidDeduction, halfPayDeduction, personalDeduction, total,
+  };
 }
 
 // ── Main Validation ───────────────────────────────────────────────────────────
-function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, subType, excludeId }) {
+function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, subType, isHalfDay, excludeId }) {
   const errors = [], warnings = [];
 
   // 1. Overlap check
@@ -321,6 +330,11 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
   } else {
     totalDays = countWorkingDays(startDate, endDate || startDate);
     if (fmRule.adjusted) { totalDays = fmRule.days; warnings.push(fmRule.note); }
+    // Half day — override to 0.5
+    if (isHalfDay) {
+      totalDays = 0.5;
+      warnings.push('Half-day leave: 0.5 days will be deducted from your balance.');
+    }
   }
 
   // 10. Balance & pay classification
@@ -399,7 +413,7 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
   }
 
   // 12. Salary deduction calculation (shown to employee BEFORE submit)
-  const deduction = calculateDeduction(employee, unpaid, halfPay, personalHoursUnpaid);
+  const deduction = calculateDeduction(employee, unpaid, halfPay, personalHoursUnpaid, leaveType);
   if (deduction.total > 0 && errors.length === 0) {
     const currency = 'AED';
     if (unpaid > 0 || halfPay > 0) {

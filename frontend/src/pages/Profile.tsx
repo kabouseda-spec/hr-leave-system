@@ -27,7 +27,7 @@ export default function Profile() {
   const [personalMsg, setPersonalMsg] = useState('');
 
   // New family member
-  const [newMember, setNewMember] = useState({ relationship: 'child', name: '', date_of_birth: '' });
+  const [newMember, setNewMember] = useState({ relationship: 'child', name: '', date_of_birth: '', gender: '' });
   const [addingMember, setAddingMember] = useState(false);
 
   // Password
@@ -75,7 +75,7 @@ export default function Profile() {
     try {
       const res = await api.post(`/employees/${user!.id}/family`, newMember);
       setFamily(prev => [...prev, { ...newMember, id: res.data.id, date_of_birth: newMember.date_of_birth || null }]);
-      setNewMember({ relationship: 'child', name: '', date_of_birth: '' });
+      setNewMember({ relationship: 'child', name: '', date_of_birth: '', gender: '' });
     } finally { setAddingMember(false); }
   };
 
@@ -255,7 +255,7 @@ export default function Profile() {
           {/* Add new */}
           <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 space-y-3">
             <p className="text-xs font-semibold text-brand-700">Add Family Member</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label text-xs">Relationship</label>
                 <select className="input text-sm" value={newMember.relationship}
@@ -263,6 +263,16 @@ export default function Profile() {
                   <option value="child">Child</option>
                   <option value="sibling">Sibling</option>
                   <option value="parent">Parent</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs">Gender</label>
+                <select className="input text-sm" value={newMember.gender}
+                  onChange={e => setNewMember(m => ({ ...m, gender: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  <option value="male">Male 👦</option>
+                  <option value="female">Female 👧</option>
                   <option value="other">Other</option>
                 </select>
               </div>

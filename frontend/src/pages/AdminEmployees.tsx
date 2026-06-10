@@ -60,6 +60,8 @@ const BLANK_FORM = {
   basic_salary: '', hra: '', other_allowance: '', manager_id: '',
   passport_number: '', passport_expiry: '',
   visa_number: '', visa_type: 'Employment', visa_expiry: '', visa_country: 'UAE',
+  visa_issuing_company: '', labor_card_number: '', labor_card_expiry: '',
+  temp_work_permit: false, temp_work_permit_date: '', temp_work_permit_expiry: '', temp_work_permit_company: '',
   end_of_service_date: '',
   date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '',
 };
@@ -106,6 +108,12 @@ export default function AdminEmployees() {
         passport_number: full.passport_number || '', passport_expiry: full.passport_expiry || '',
         visa_number: full.visa_number || '', visa_type: full.visa_type || 'Employment',
         visa_expiry: full.visa_expiry || '', visa_country: full.visa_country || 'UAE',
+        visa_issuing_company: full.visa_issuing_company || '',
+        labor_card_number: full.labor_card_number || '', labor_card_expiry: full.labor_card_expiry || '',
+        temp_work_permit: !!full.temp_work_permit,
+        temp_work_permit_date: full.temp_work_permit_date || '',
+        temp_work_permit_expiry: full.temp_work_permit_expiry || '',
+        temp_work_permit_company: full.temp_work_permit_company || '',
         end_of_service_date: full.end_of_service_date || '',
         date_of_birth: full.date_of_birth || '',
         spouse_name: full.spouse_name || '',
@@ -123,6 +131,8 @@ export default function AdminEmployees() {
         passport_number: emp.passport_number || '', passport_expiry: emp.passport_expiry || '',
         visa_number: emp.visa_number || '', visa_type: emp.visa_type || 'Employment',
         visa_expiry: emp.visa_expiry || '', visa_country: 'UAE',
+        visa_issuing_company: '', labor_card_number: '', labor_card_expiry: '',
+        temp_work_permit: false, temp_work_permit_date: '', temp_work_permit_expiry: '', temp_work_permit_company: '',
         end_of_service_date: emp.end_of_service_date || '',
         hra: '0', other_allowance: '0',
         date_of_birth: '', spouse_name: '', spouse_dob: '', spouse_in_uae: false, marriage_anniversary: '',
@@ -604,11 +614,74 @@ export default function AdminEmployees() {
                         <input className="input" value={form.visa_country} onChange={e => setForm(f => ({ ...f, visa_country: e.target.value }))} />
                       </div>
                     </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                      <p className="font-semibold mb-1">Automatic reminders</p>
-                      <p>HR will be notified at 90 days before expiry. The employee will receive a personal reminder at 30 days.</p>
+                    {/* Visa Issuing Company */}
+                    <div>
+                      <label className="label">Visa Issuing Company</label>
+                      <select className="input" value={form.visa_issuing_company} onChange={e => setForm(f => ({ ...f, visa_issuing_company: e.target.value }))}>
+                        <option value="">— Select company —</option>
+                        {['KME','KSVC','KATS','KMCI','KAILS'].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+
+                  {/* Labour Card */}
+                  <div className="border-t border-gray-100 pt-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Labour Card</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="label">Labour Card Number</label>
+                        <input className="input" value={form.labor_card_number} onChange={e => setForm(f => ({ ...f, labor_card_number: e.target.value }))} placeholder="Labour card number" />
+                      </div>
+                      <div>
+                        <label className="label">Labour Card Expiry</label>
+                        <input type="date" className="input" value={form.labor_card_expiry} onChange={e => setForm(f => ({ ...f, labor_card_expiry: e.target.value }))} />
+                      </div>
                     </div>
                   </div>
+
+                  {/* Temporary Work Permit */}
+                  <div className="border-t border-gray-100 pt-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <input type="checkbox" id="temp_wp" checked={!!form.temp_work_permit}
+                        onChange={e => setForm(f => ({ ...f, temp_work_permit: e.target.checked }))}
+                        className="h-4 w-4 rounded border-gray-300 text-brand-600 cursor-pointer" />
+                      <label htmlFor="temp_wp" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                        Temporary Work Permit
+                      </label>
+                    </div>
+                    {form.temp_work_permit && (
+                      <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <div>
+                          <label className="label">Issue Date</label>
+                          <input type="date" className="input" value={form.temp_work_permit_date}
+                            onChange={e => {
+                              const d = e.target.value;
+                              const expiry = d ? new Date(new Date(d).setMonth(new Date(d).getMonth() + 6)).toISOString().split('T')[0] : '';
+                              setForm(f => ({ ...f, temp_work_permit_date: d, temp_work_permit_expiry: expiry }));
+                            }} />
+                          <p className="text-xs text-blue-600 mt-1">Expiry auto-set to 6 months</p>
+                        </div>
+                        <div>
+                          <label className="label">Expiry Date</label>
+                          <input type="date" className="input" value={form.temp_work_permit_expiry}
+                            onChange={e => setForm(f => ({ ...f, temp_work_permit_expiry: e.target.value }))} />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="label">Working For Company</label>
+                          <select className="input" value={form.temp_work_permit_company}
+                            onChange={e => setForm(f => ({ ...f, temp_work_permit_company: e.target.value }))}>
+                            <option value="">— Select company —</option>
+                            {['KME','KSVC','KATS','KMCI','KAILS'].map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                    <p className="font-semibold mb-1">Automatic reminders</p>
+                    <p>HR will be notified at 90 days before expiry. The employee will receive a personal reminder at 30 days.</p>
+                  </div>
+                </div>
                 )}
               </div>
 

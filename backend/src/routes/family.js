@@ -26,15 +26,15 @@ router.get('/', auth, (req, res) => {
 // POST /api/employees/:id/family — employee or HR admin
 router.post('/', auth, (req, res) => {
   if (!canAccess(req, req.params.id, true)) return res.status(403).json({ error: 'Access denied' });
-  const { relationship, name, date_of_birth } = req.body;
+  const { relationship, name, date_of_birth, gender } = req.body;
   if (!relationship || !name) return res.status(400).json({ error: 'relationship and name are required' });
 
   const id = uuidv4();
   db.prepare(
-    'INSERT INTO family_members (id, employee_id, relationship, name, date_of_birth) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, req.params.id, relationship, name.trim(), n(date_of_birth));
+    'INSERT INTO family_members (id, employee_id, relationship, name, date_of_birth, gender) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(id, req.params.id, relationship, name.trim(), n(date_of_birth), n(gender));
 
-  res.status(201).json({ id, relationship, name: name.trim(), date_of_birth: n(date_of_birth) });
+  res.status(201).json({ id, relationship, name: name.trim(), date_of_birth: n(date_of_birth), gender: n(gender) });
 });
 
 // PATCH /api/employees/:id/family/:memberId
