@@ -207,6 +207,86 @@ router.get('/audit', auth, rbac('hr_admin'), (req, res) => {
   res.json(rows);
 });
 
+// ── GET /reports/payslip — monthly payslip for an employee ───────────────────
+router.get('/payslip', auth, (req, res) => {
+  const employeeId = req.query.employee_id || req.user.id;
+  // Employees can only see their own
+  if (req.user.role === 'employee' && employeeId !== req.user.id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  const monthParam = req.query.month || dayjs().format('YYYY-MM');
+  const [year, month] = monthParam.split('-');
+  const startOfMonth = `${year}-${month}-01`;
+  const endOfMonth = dayjs(startOfMonth).endOf('month').format('YYYY-MM-DD');
+
+  const emp = db.prepare('SELECT * FROM employees WHERE id=?').get(employeeId);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  const basicSalary = emp.basic_salary || 0;
+  const hra = emp.hra || 0;
+  const otherAllowance = emp.other_allowance || 0;
+  const fullSalary = basicSalary + hra + otherAllowance;
+
+  // Approved leaves this month with deductions
+  const leaves = db.prepare(`
+    SELECT leave_type, start_date, end_date, total_days, paid_days, half_pay_days, unpaid_days, is_half_day
+    FROM leave_requests
+    WHERE employee_id=? AND status='approved'
+      AND start_date <= ? AND end_date >= ?
+  `).all(employeeId, endOfMonth, startOfMonth);
+
+  let totalUnpaidDays = 0, totalHalfPayDays = 0;
+  const leaveItems = [];
+  for (const l of leaves) {
+    totalUnpaidDays += l.unpaid_days || 0;
+    totalHalfPayDays += l.half_pay_days || 0;
+    if ((l.unpaid_days || 0) > 0 || (l.half_pay_days || 0) > 0) {
+      const dailyRate = l.leave_type === 'annual' ? fullSalary / 22 : fullSalary / 30;
+      leaveItems.push({
+        leave_type: l.leave_type,
+        start_date: l.start_date,
+        end_date: l.end_date,
+        total_days: l.total_days,
+        unpaid_days: l.unpaid_days,
+        half_pay_days: l.half_pay_days,
+        daily_rate: Math.round(dailyRate * 100) / 100,
+        deduction: Math.round(((l.unpaid_days || 0) * dailyRate + (l.half_pay_days || 0) * dailyRate / 2) * 100) / 100,
+      });
+    }
+  }
+
+  // Personal time deduction
+  const period = dayjs(startOfMonth).month() < 6 ? `${year}-H1` : `${year}-H2`;
+  const ptBalance = db.prepare('SELECT allocated, used FROM personal_time_balances WHERE employee_id=? AND period=?').get(employeeId, period);
+  const personalHoursOver = ptBalance && ptBalance.used > ptBalance.allocated ? ptBalance.used - ptBalance.allocated : 0;
+  const hourlyRate = basicSalary / 30 / 8;
+  const personalDeduction = Math.round(personalHoursOver * hourlyRate * 100) / 100;
+
+  // Deduction totals
+  const annualDailyRate = fullSalary / 22;
+  const sickDailyRate = fullSalary / 30;
+  const unpaidDeduction = leaveItems.reduce((s, l) => s + l.deduction, 0);
+  const totalDeduction = Math.round((unpaidDeduction + personalDeduction) * 100) / 100;
+  const netPay = Math.round((fullSalary - totalDeduction) * 100) / 100;
+
+  // Accumulated gratuity
+  const engine = require('../services/leaveEngine');
+  const gratuity = engine.calculateGratuity(emp);
+
+  res.json({
+    month: monthParam,
+    employee: { id: emp.id, name: emp.full_name, employee_number: emp.employee_number, department: emp.department, hire_date: emp.hire_date },
+    salary: { basic: basicSalary, hra, other: otherAllowance, total: fullSalary },
+    leaves: leaveItems,
+    personal_time_deduction: personalDeduction,
+    personal_hours_over: personalHoursOver,
+    total_deduction: totalDeduction,
+    net_pay: netPay,
+    gratuity,
+    working_days: 22,
+  });
+});
+
 // Notifications
 router.get('/notifications', auth, (req, res) => {
   const rows = db.prepare('SELECT * FROM notifications WHERE employee_id=? ORDER BY created_at DESC LIMIT 50')

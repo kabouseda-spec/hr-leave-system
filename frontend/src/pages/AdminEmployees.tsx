@@ -589,18 +589,6 @@ export default function AdminEmployees() {
                           <option>Other</option>
                         </select>
                       </div>
-                      <div className="col-span-2 flex items-center gap-3 py-1">
-                        <input
-                          type="checkbox"
-                          id="admin_spouse_in_uae"
-                          checked={!!form.spouse_in_uae}
-                          onChange={e => setForm(f => ({ ...f, spouse_in_uae: e.target.checked }))}
-                          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                        />
-                        <label htmlFor="admin_spouse_in_uae" className="text-sm font-medium text-gray-700 cursor-pointer">
-                          Spouse / Partner currently in the UAE 🇦🇪
-                        </label>
-                      </div>
                       <div>
                         <label className="label">Visa Expiry Date</label>
                         <input type="date" className="input" value={form.visa_expiry} onChange={e => setForm(f => ({ ...f, visa_expiry: e.target.value }))} />

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   HomeIcon, CalendarDaysIcon, ClockIcon, UsersIcon,
   ChartBarIcon, BellIcon, UserCircleIcon, ArrowRightOnRectangleIcon,
-  CheckCircleIcon, DocumentPlusIcon, SunIcon, BanknotesIcon,
+  CheckCircleIcon, DocumentPlusIcon, SunIcon, BanknotesIcon, DocumentTextIcon as PayslipIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import api from '../api/client';
@@ -57,6 +57,7 @@ export default function Layout() {
           <NavItem to="/leave/request" icon={DocumentPlusIcon} label="Request Leave" />
           <NavItem to="/leave/history" icon={CalendarDaysIcon} label="My Leaves" />
           <NavItem to="/personal-time" icon={ClockIcon} label="Personal Time" />
+          <NavItem to="/payslip" icon={PayslipIcon} label="My Payslip" />
           <NavItem to="/calendar" icon={CalendarDaysIcon} label="Team Calendar" />
 
           {(user?.role === 'manager' || user?.role === 'hr_admin') && (

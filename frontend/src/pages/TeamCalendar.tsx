@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 interface CalEvent {
   id: string;
@@ -25,15 +26,21 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function TeamCalendar() {
+  const { user } = useAuth();
   const [current, setCurrent] = useState(dayjs());
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myDeductions, setMyDeductions] = useState<any>(null);
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/leaves/meta/calendar?year=${current.year()}&month=${current.month() + 1}`)
-      .then(r => setEvents(r.data))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get(`/leaves/meta/calendar?year=${current.year()}&month=${current.month() + 1}`),
+      api.get(`/reports/payslip?month=${current.format('YYYY-MM')}`),
+    ]).then(([calRes, payRes]) => {
+      setEvents(calRes.data);
+      setMyDeductions(payRes.data);
+    }).finally(() => setLoading(false));
   }, [current]);
 
   const startOfMonth = current.startOf('month');
@@ -183,6 +190,55 @@ export default function TeamCalendar() {
       {events.length === 0 && !loading && (
         <div className="card text-center py-10 text-gray-400">
           No approved leaves in {current.format('MMMM YYYY')}.
+        </div>
+      )}
+
+      {/* Personal deductions for this month */}
+      {myDeductions && (
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">
+            💰 My Deductions — {current.format('MMMM YYYY')}
+          </h2>
+          {myDeductions.total_deduction === 0 ? (
+            <div className="card py-4 text-center text-sm text-green-700 bg-green-50 border border-green-200">
+              ✅ No deductions this month — full salary payable.
+            </div>
+          ) : (
+            <div className="card p-0 overflow-hidden border border-red-100">
+              <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-center justify-between">
+                <p className="text-sm font-semibold text-red-800">Salary deductions this month</p>
+                <p className="text-red-700 font-bold">- AED {myDeductions.total_deduction.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {myDeductions.leaves?.map((l: any, i: number) => (
+                  <div key={i} className="px-4 py-3 flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium text-gray-900 capitalize">{l.leave_type} leave</p>
+                      <p className="text-xs text-gray-400">
+                        {dayjs(l.start_date).format('D MMM')} – {dayjs(l.end_date).format('D MMM')}
+                        {l.unpaid_days > 0 && ` · ${l.unpaid_days} unpaid day(s)`}
+                        {l.half_pay_days > 0 && ` · ${l.half_pay_days} half-pay day(s)`}
+                      </p>
+                    </div>
+                    <span className="text-red-600 font-medium">- AED {l.deduction.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+                {myDeductions.personal_time_deduction > 0 && (
+                  <div className="px-4 py-3 flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium text-gray-900">Personal time overage</p>
+                      <p className="text-xs text-gray-400">{myDeductions.personal_hours_over?.toFixed(1)}h over allocation</p>
+                    </div>
+                    <span className="text-red-600 font-medium">- AED {myDeductions.personal_time_deduction.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="px-4 py-3 flex items-center justify-between bg-gray-50">
+                  <span className="text-sm text-gray-500">Net pay this month</span>
+                  <span className="font-bold text-gray-900">AED {myDeductions.net_pay?.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -342,11 +342,9 @@ router.get('/meta/calendar', auth, (req, res) => {
   const y = year || new Date().getFullYear();
   const m = month ? String(month).padStart(2, '0') : null;
 
+  // All roles see ALL approved leaves — full company visibility
   let where = "lr.status='approved'";
   const params = [];
-
-  if (req.user.role === 'manager') { where += ' AND e.manager_id=?'; params.push(req.user.id); }
-  else if (req.user.role === 'employee') { where += ' AND lr.employee_id=?'; params.push(req.user.id); }
 
   if (m) {
     where += ` AND (strftime('%Y-%m',lr.start_date)=? OR strftime('%Y-%m',lr.end_date)=?)`;
