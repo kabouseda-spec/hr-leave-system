@@ -4,6 +4,7 @@ import {
   HomeIcon, CalendarDaysIcon, ClockIcon, UsersIcon,
   ChartBarIcon, BellIcon, UserCircleIcon, ArrowRightOnRectangleIcon,
   CheckCircleIcon, DocumentPlusIcon, SunIcon, BanknotesIcon, DocumentTextIcon as PayslipIcon,
+  ArchiveBoxIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import api from '../api/client';
@@ -79,6 +80,7 @@ export default function Layout() {
               </div>
               <NavItem to="/admin/employees" icon={UsersIcon} label="Employees" />
               <NavItem to="/admin/holidays" icon={SunIcon} label="Public Holidays" />
+              <NavItem to="/admin/historical" icon={ArchiveBoxIcon} label="Historical Data" />
             </>
           )}
         </nav>

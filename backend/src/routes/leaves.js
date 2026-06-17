@@ -362,4 +362,94 @@ router.get('/meta/calendar', auth, (req, res) => {
   res.json(rows);
 });
 
+// ── POST /leaves/admin/backdate — HR Admin historical data entry ───────────────
+router.post('/admin/backdate', auth, rbac('hr_admin'), (req, res) => {
+  const {
+    employee_id, leave_type, sub_type, start_date, end_date,
+    paid_days, half_pay_days, unpaid_days, reason, is_half_day,
+  } = req.body;
+
+  if (!employee_id || !leave_type || !start_date)
+    return res.status(400).json({ error: 'employee_id, leave_type, and start_date are required' });
+
+  const minDate = '2025-01-01';
+  if (start_date < minDate)
+    return res.status(400).json({ error: 'Historical data entry is limited to 2025 onwards' });
+
+  const employee = db.prepare('SELECT * FROM employees WHERE id=?').get(employee_id);
+  if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+  const end = end_date || start_date;
+
+  // Only overlap check — skip all other validations for historical entry
+  const overlap = engine.checkOverlap(employee.id, start_date, end);
+  if (overlap.hasOverlap)
+    return res.status(422).json({ error: overlap.reason });
+
+  const totalDays = parseFloat(paid_days || 0) + parseFloat(half_pay_days || 0) + parseFloat(unpaid_days || 0)
+    || engine.countWorkingDays(start_date, end);
+
+  const paid   = parseFloat(paid_days || 0) || totalDays;
+  const half   = parseFloat(half_pay_days || 0);
+  const unpaid = parseFloat(unpaid_days || 0);
+
+  const rollover = engine.getRolloverPeriod(employee.hire_date, start_date);
+  const policy = db.prepare('SELECT * FROM leave_policies WHERE leave_type=?').get(leave_type);
+  let allocated = policy ? policy.annual_allowance : 0;
+  if (leave_type === 'annual') allocated = engine.calculateAnnualLeaveAllowance(employee, start_date);
+  ensureBalance(employee.id, leave_type, rollover.year, rollover.periodStart, rollover.periodEnd, allocated);
+
+  const id = uuidv4();
+  db.prepare(`INSERT INTO leave_requests
+    (id,employee_id,leave_type,sub_type,start_date,end_date,total_days,paid_days,half_pay_days,unpaid_days,reason,status,approved_by,approved_at,is_half_day)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,'approved',?,datetime('now'),?)`)
+    .run(id, employee.id, leave_type, sub_type || null, start_date, end,
+      totalDays, paid, half, unpaid, reason || null, req.user.id, is_half_day ? 1 : 0);
+
+  db.prepare(`UPDATE leave_balances SET
+    used_paid=used_paid+?, used_half=used_half+?, used_unpaid=used_unpaid+?,
+    updated_at=datetime('now') WHERE employee_id=? AND leave_type=? AND year=?`)
+    .run(paid, half, unpaid, employee.id, leave_type, rollover.year);
+
+  res.status(201).json({ id, message: 'Historical leave entry created and approved', totalDays, paid, half, unpaid });
+});
+
+// ── POST /personal-time/admin/backdate — HR Admin historical personal time ─────
+// (exposed here so we don't have to modify the PT router separately)
+router.post('/admin/backdate-pt', auth, rbac('hr_admin'), (req, res) => {
+  const { employee_id, log_date, hours_used, reason } = req.body;
+  if (!employee_id || !log_date || !hours_used)
+    return res.status(400).json({ error: 'employee_id, log_date, and hours_used required' });
+
+  if (log_date < '2025-01-01')
+    return res.status(400).json({ error: 'Historical data entry is limited to 2025 onwards' });
+
+  const emp = db.prepare('SELECT * FROM employees WHERE id=?').get(employee_id);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  const hrs = parseFloat(hours_used);
+  const { getPersonalTimePeriod } = engine;
+  const period = getPersonalTimePeriod(log_date);
+
+  // Ensure balance row exists
+  const existing = db.prepare('SELECT id FROM personal_time_balances WHERE employee_id=? AND period=?').get(emp.id, period);
+  if (!existing) {
+    db.prepare('INSERT INTO personal_time_balances (id,employee_id,period,allocated,used) VALUES (?,?,?,6,0)')
+      .run(uuidv4(), emp.id, period);
+  }
+
+  const id = uuidv4();
+  db.prepare(`INSERT INTO personal_time_log (id,employee_id,log_date,hours_used,reason,period,status,approved_by)
+    VALUES (?,?,?,?,?,?,'approved',?)`)
+    .run(id, emp.id, log_date, hrs, reason || null, period, req.user.id);
+
+  const balance = db.prepare('SELECT * FROM personal_time_balances WHERE employee_id=? AND period=?').get(emp.id, period);
+  const newUsed = balance.used + hrs;
+  const isDeducted = newUsed > balance.allocated ? 1 : 0;
+  db.prepare('UPDATE personal_time_balances SET used=?, deducted=? WHERE employee_id=? AND period=?')
+    .run(newUsed, isDeducted, emp.id, period);
+
+  res.status(201).json({ id, period, newUsed, deducted: isDeducted, message: 'Personal time entry created' });
+});
+
 module.exports = router;

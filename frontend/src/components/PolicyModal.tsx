@@ -73,7 +73,9 @@ export default function PolicyModal({ onClose }: Props) {
           </Section>
 
           <Section title="Maternity Leave">
-            <Row label="Duration" value="90 days — full pay" />
+            <Row label="Total duration" value="60 days" />
+            <Row label="First 45 days" value="Full pay" />
+            <Row label="Remaining 15 days" value="Half pay" />
             <Row label="Breastfeeding breaks" value="1–2 breaks/day, up to 2 hours total/day" />
           </Section>
 
@@ -84,7 +86,7 @@ export default function PolicyModal({ onClose }: Props) {
 
           <Section title="Compassionate Leave">
             <Row label="Death of spouse" value="5 paid days" />
-            <Row label="Death of parent / child / sibling / grandparent" value="5 paid days" />
+            <Row label="Death of parent / child / sibling / grandchild / grandparent" value="3 paid days" />
           </Section>
 
           <Section title="Study Leave">
@@ -93,9 +95,8 @@ export default function PolicyModal({ onClose }: Props) {
           </Section>
 
           <Section title="Notice Period Rules">
-            <Row label="Service 6 months–1 year" value="1 week notice" />
-            <Row label="Service 1–5 years" value="2 weeks notice" />
-            <Row label="Service 5+ years" value="1 month notice" />
+            <Row label="During probation (under 6 months)" value="2 weeks notice" />
+            <Row label="After probation" value="Per contract terms" />
             <Row label="Resignation minimum" value="30 days" />
             <Row label="Resignation maximum" value="3 months" />
             <Row label="Leave during notice period" value="Not permitted" />
@@ -104,8 +105,7 @@ export default function PolicyModal({ onClose }: Props) {
           </Section>
 
           <Section title="Probation">
-            <Row label="Duration" value="6 months (max 9 months with extension)" />
-            <Row label="Extension approval" value="Manager + HR (written confirmation required)" />
+            <Row label="Duration" value="6 months (fixed — no extension)" />
             <Row label="Sick leave during probation" value="0 paid days" />
             <Row label="UAE law — employer termination notice" value="14 days" />
             <Row label="Leaving UAE during probation" value="14-day notice; 3-month rejoin triggers 1-year ban" />
@@ -133,7 +133,7 @@ export default function PolicyModal({ onClose }: Props) {
             <Row label="Maternity (law minimum)" value="60 days (45 full / 15 half)" />
             <Row label="Parental leave (law)" value="5 working days" />
             <Row label="Compassionate — spouse" value="5 days" />
-            <Row label="Compassionate — parent/child/sibling" value="3 days (company gives 5)" />
+            <Row label="Compassionate — parent/child/sibling/grandchild/grandparent" value="3 days" />
           </Section>
 
         </div>

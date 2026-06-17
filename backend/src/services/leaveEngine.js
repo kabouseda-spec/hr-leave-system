@@ -10,7 +10,7 @@ const db = require('../db/database');
 
 // ── Compassionate leave allocation by relationship ────────────────────────────
 const COMPASSIONATE_DAYS = {
-  spouse: 5, child: 5, parent: 5, sibling: 5, grandparent: 3,
+  spouse: 5, child: 3, parent: 3, sibling: 3, grandparent: 3, grandchild: 3,
 };
 
 function getCompassionateAllowance(subType) {

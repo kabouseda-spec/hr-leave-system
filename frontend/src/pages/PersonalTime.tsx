@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
-import { ClockIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, ExclamationTriangleIcon, InformationCircleIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
 interface PTBalance {
@@ -78,12 +78,55 @@ export default function PersonalTime() {
   const currentPeriod = dayjs().month() < 6 ? `${dayjs().year()}-H1` : `${dayjs().year()}-H2`;
   const currentBalance = balances.find(b => b.period === currentPeriod);
 
+  // Check eligibility: 1 year of service required
+  const hireDate = (user as any)?.hire_date;
+  const monthsWorked = hireDate ? dayjs().diff(dayjs(hireDate), 'month') : 99;
+  const isEligible = monthsWorked >= 12;
+  const monthsUntilEligible = isEligible ? 0 : 12 - monthsWorked;
+
+  // Period reset info
+  const periodResetDate = dayjs().month() < 6
+    ? `${dayjs().year()}-07-01`
+    : `${dayjs().year() + 1}-01-01`;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Personal Time</h1>
-        <p className="text-gray-500 text-sm mt-0.5">6 hours per 6-month period — tracked and auto-calculated</p>
+        <p className="text-gray-500 text-sm mt-0.5">6 hours per 6-month period — no rollover</p>
       </div>
+
+      {/* Policy info box */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+        <div className="flex items-center gap-2 text-blue-800 font-semibold text-sm">
+          <InformationCircleIcon className="h-5 w-5 flex-shrink-0" />
+          Personal Time Policy
+        </div>
+        <ul className="text-sm text-blue-700 space-y-1 ml-7 list-disc">
+          <li>Eligible after <strong>1 year of continuous service</strong></li>
+          <li><strong>6 hours</strong> allocated per 6-month period (Jan–Jun and Jul–Dec)</li>
+          <li>Unused hours <strong>do not roll over</strong> — each period resets to 6 hours</li>
+          <li>15-minute grace period for late arrivals (no charge)</li>
+          <li>Any time beyond the grace period counts against your personal time</li>
+          <li>Exceeding 6 hours triggers a payroll deduction for the excess</li>
+        </ul>
+        <p className="text-xs text-blue-500 ml-7">
+          Current period resets on <strong>{dayjs(periodResetDate).format('D MMMM YYYY')}</strong> — unused hours will be forfeited.
+        </p>
+      </div>
+
+      {/* Ineligibility banner */}
+      {!isEligible && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <LockClosedIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900 text-sm">Not yet eligible</p>
+            <p className="text-amber-700 text-sm mt-0.5">
+              Personal time requires 1 year of service. You have {monthsUntilEligible} month{monthsUntilEligible !== 1 ? 's' : ''} remaining before eligibility.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Current period balance */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -113,7 +156,7 @@ export default function PersonalTime() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Log form */}
-        <div className="card space-y-4">
+        <div className={`card space-y-4 ${!isEligible ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold text-gray-900">Log Personal Time</h2>
           <p className="text-sm text-gray-500">
             Late arrivals beyond 15-minute grace are counted here. Over 6h/period = payroll deduction.
