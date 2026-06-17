@@ -36,6 +36,7 @@ interface LeaveRequest {
   status: string;
   paid_days: number;
   unpaid_days: number;
+  full_name?: string;
 }
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -361,6 +362,9 @@ export default function Dashboard() {
                       <div className="w-1.5 h-8 rounded-full bg-brand-200 flex-shrink-0" />
                       <div>
                         <p className="font-medium text-sm text-gray-900 capitalize">{l.leave_type} Leave</p>
+                        {l.full_name && (
+                          <p className="text-xs font-medium text-brand-600">{l.full_name}</p>
+                        )}
                         <p className="text-xs text-gray-400">
                           {dayjs(l.start_date).format('D MMM')} – {dayjs(l.end_date).format('D MMM YYYY')} · {l.total_days} days
                         </p>
