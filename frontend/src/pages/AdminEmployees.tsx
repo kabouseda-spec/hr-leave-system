@@ -77,10 +77,68 @@ export default function AdminEmployees() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [form, setForm] = useState({ ...BLANK_FORM });
-  const [activeTab, setActiveTab] = useState<'info' | 'personal' | 'visa'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'personal' | 'visa' | 'leaves'>('info');
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [newMember, setNewMember] = useState({ relationship: 'child', name: '', date_of_birth: '' });
   const [addingMember, setAddingMember] = useState(false);
+
+  // Leave Records tab state
+  const [empLeaves, setEmpLeaves] = useState<any[]>([]);
+  const [leavesLoading, setLeavesLoading] = useState(false);
+  const [addLeaveForm, setAddLeaveForm] = useState({
+    leave_type: 'annual', sub_type: '', start_date: '', end_date: '',
+    paid_days: '', half_pay_days: '', unpaid_days: '', reason: '',
+  });
+  const [addPtForm, setAddPtForm] = useState({ log_date: '', hours_used: '', reason: '' });
+  const [addLeaveMsg, setAddLeaveMsg] = useState<{ type: 'success'|'error'; msg: string }|null>(null);
+  const [addingLeave, setAddingLeave] = useState(false);
+
+  const loadEmpLeaves = (empId: string) => {
+    setLeavesLoading(true);
+    api.get(`/leaves?employee_id=${empId}`)
+      .then(r => setEmpLeaves(r.data))
+      .finally(() => setLeavesLoading(false));
+  };
+
+  const submitHistoricalLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setAddLeaveMsg(null);
+    setAddingLeave(true);
+    try {
+      const payload: any = { ...addLeaveForm, employee_id: editing.id };
+      if (!payload.end_date) payload.end_date = payload.start_date;
+      if (!payload.sub_type) delete payload.sub_type;
+      ['paid_days','half_pay_days','unpaid_days'].forEach(k => { if (!payload[k]) delete payload[k]; });
+      const res = await api.post('/leaves/admin/backdate', payload);
+      setAddLeaveMsg({ type: 'success', msg: `Added: ${res.data.totalDays} day(s) — ${res.data.paid}d paid, ${res.data.half}d half, ${res.data.unpaid}d unpaid` });
+      setAddLeaveForm({ leave_type: 'annual', sub_type: '', start_date: '', end_date: '', paid_days: '', half_pay_days: '', unpaid_days: '', reason: '' });
+      loadEmpLeaves(editing.id);
+    } catch (err: any) {
+      setAddLeaveMsg({ type: 'error', msg: err.response?.data?.error || 'Failed to add leave entry' });
+    } finally { setAddingLeave(false); }
+  };
+
+  const submitHistoricalPt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setAddLeaveMsg(null);
+    setAddingLeave(true);
+    try {
+      const res = await api.post('/leaves/admin/backdate-pt', { ...addPtForm, employee_id: editing.id });
+      setAddLeaveMsg({ type: 'success', msg: `Personal time added: ${addPtForm.hours_used}h for period ${res.data.period}` });
+      setAddPtForm({ log_date: '', hours_used: '', reason: '' });
+    } catch (err: any) {
+      setAddLeaveMsg({ type: 'error', msg: err.response?.data?.error || 'Failed to add personal time' });
+    } finally { setAddingLeave(false); }
+  };
+
+  const LEAVE_TYPE_BADGE: Record<string,string> = {
+    annual:'bg-blue-100 text-blue-800', sick:'bg-red-100 text-red-800',
+    personal:'bg-purple-100 text-purple-800', maternity:'bg-pink-100 text-pink-800',
+    parental:'bg-indigo-100 text-indigo-800', compassionate:'bg-gray-100 text-gray-800',
+    study:'bg-green-100 text-green-800', unpaid:'bg-orange-100 text-orange-800',
+  };
 
   const load = () => {
     setLoading(true);
@@ -338,8 +396,13 @@ export default function AdminEmployees() {
                 { key: 'info',     label: 'Personal Info' },
                 { key: 'personal', label: 'Family & Birthdays' },
                 { key: 'visa',     label: 'Visa & Passport' },
-              ] as const).map(t => (
-                <button key={t.key} onClick={() => setActiveTab(t.key)}
+                ...(editing ? [{ key: 'leaves', label: '📋 Leave Records' }] : []),
+              ] as const).map((t: any) => (
+                <button key={t.key} type="button" onClick={() => {
+                  setActiveTab(t.key);
+                  setAddLeaveMsg(null);
+                  if (t.key === 'leaves' && editing) loadEmpLeaves(editing.id);
+                }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === t.key ? 'bg-brand-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
                   {t.label}
                 </button>
@@ -671,27 +734,172 @@ export default function AdminEmployees() {
                   </div>
                 </div>
                 )}
+
+                {activeTab === 'leaves' && editing && (
+                  <div className="space-y-5">
+                    <p className="text-sm text-gray-500">
+                      Add historical or current leave entries directly for <strong>{editing.full_name}</strong>.
+                      All entries are immediately approved and update leave balances. Minimum date: 2025-01-01.
+                    </p>
+
+                    {addLeaveMsg && (
+                      <div className={`p-3 rounded-lg text-sm border ${addLeaveMsg.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                        {addLeaveMsg.type === 'success' ? '✅ ' : '❌ '}{addLeaveMsg.msg}
+                      </div>
+                    )}
+
+                    {/* Add Leave form */}
+                    <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                      <p className="text-sm font-semibold text-gray-700">Add Leave Entry</p>
+                      <form onSubmit={submitHistoricalLeave} className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="label">Leave Type</label>
+                            <select className="input" value={addLeaveForm.leave_type}
+                              onChange={e => setAddLeaveForm(f => ({ ...f, leave_type: e.target.value, sub_type: '' }))}>
+                              {[['annual','Annual'],['sick','Sick'],['maternity','Maternity'],
+                                ['parental','Parental'],['compassionate','Compassionate'],
+                                ['study','Study'],['unpaid','Unpaid']].map(([v,l]) =>
+                                <option key={v} value={v}>{l}</option>)}
+                            </select>
+                          </div>
+                          {addLeaveForm.leave_type === 'compassionate' && (
+                            <div>
+                              <label className="label">Relationship</label>
+                              <select className="input" value={addLeaveForm.sub_type}
+                                onChange={e => setAddLeaveForm(f => ({ ...f, sub_type: e.target.value }))} required>
+                                <option value="">Select…</option>
+                                {['spouse','parent','child','sibling','grandparent','grandchild'].map(s =>
+                                  <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                              </select>
+                            </div>
+                          )}
+                          <div>
+                            <label className="label">Start Date *</label>
+                            <input type="date" className="input" required
+                              value={addLeaveForm.start_date} min="2025-01-01" max={dayjs().format('YYYY-MM-DD')}
+                              onChange={e => setAddLeaveForm(f => ({ ...f, start_date: e.target.value, end_date: f.end_date || e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="label">End Date</label>
+                            <input type="date" className="input"
+                              value={addLeaveForm.end_date} min={addLeaveForm.start_date || '2025-01-01'} max={dayjs().format('YYYY-MM-DD')}
+                              onChange={e => setAddLeaveForm(f => ({ ...f, end_date: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500 block mb-1">Full-pay days <span className="text-gray-400">(blank=auto)</span></label>
+                            <input type="number" className="input" placeholder="auto" min="0" step="0.5"
+                              value={addLeaveForm.paid_days} onChange={e => setAddLeaveForm(f => ({ ...f, paid_days: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 block mb-1">Half-pay days</label>
+                            <input type="number" className="input" placeholder="0" min="0" step="0.5"
+                              value={addLeaveForm.half_pay_days} onChange={e => setAddLeaveForm(f => ({ ...f, half_pay_days: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 block mb-1">Unpaid days</label>
+                            <input type="number" className="input" placeholder="0" min="0" step="0.5"
+                              value={addLeaveForm.unpaid_days} onChange={e => setAddLeaveForm(f => ({ ...f, unpaid_days: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="label">Notes</label>
+                          <input type="text" className="input" placeholder="Historical data, offline approval…"
+                            value={addLeaveForm.reason} onChange={e => setAddLeaveForm(f => ({ ...f, reason: e.target.value }))} />
+                        </div>
+                        <button type="submit" className="btn-primary w-full justify-center" disabled={addingLeave}>
+                          {addingLeave ? 'Saving…' : 'Add Leave Entry (Auto-Approved)'}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Add Personal Time form */}
+                    <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                      <p className="text-sm font-semibold text-gray-700">Add Personal Time Entry</p>
+                      <form onSubmit={submitHistoricalPt} className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="label">Date *</label>
+                            <input type="date" className="input" required
+                              value={addPtForm.log_date} min="2025-01-01" max={dayjs().format('YYYY-MM-DD')}
+                              onChange={e => setAddPtForm(f => ({ ...f, log_date: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="label">Hours Used *</label>
+                            <input type="number" className="input" required placeholder="e.g. 1.5"
+                              value={addPtForm.hours_used} min="0.25" max="8" step="0.25"
+                              onChange={e => setAddPtForm(f => ({ ...f, hours_used: e.target.value }))} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="label">Notes</label>
+                          <input type="text" className="input" placeholder="Historical data…"
+                            value={addPtForm.reason} onChange={e => setAddPtForm(f => ({ ...f, reason: e.target.value }))} />
+                        </div>
+                        <button type="submit" className="btn-primary w-full justify-center" disabled={addingLeave}>
+                          {addingLeave ? 'Saving…' : 'Add Personal Time Entry (Auto-Approved)'}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Existing leave history */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">Existing Leave Records</p>
+                      {leavesLoading ? (
+                        <div className="flex justify-center py-6">
+                          <div className="animate-spin h-6 w-6 border-4 border-brand-500 border-t-transparent rounded-full" />
+                        </div>
+                      ) : empLeaves.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">No leave records found.</p>
+                      ) : (
+                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                          {empLeaves.map((l: any) => (
+                            <div key={l.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize flex-shrink-0 ${LEAVE_TYPE_BADGE[l.leave_type] || 'bg-gray-100 text-gray-700'}`}>
+                                  {l.leave_type}
+                                </span>
+                                <span className="text-gray-600 text-xs whitespace-nowrap">
+                                  {dayjs(l.start_date).format('D MMM YY')} – {dayjs(l.end_date).format('D MMM YY')}
+                                </span>
+                                <span className="text-gray-400 text-xs">{l.total_days}d</span>
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                l.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                l.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                                l.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
+                              }`}>{l.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {error && <p className="px-5 text-red-600 text-sm flex-shrink-0">{error}</p>}
 
               <div className="flex gap-3 p-5 border-t border-gray-100 flex-shrink-0">
-                {/* Delete button — HR Admin only, editing only */}
-                {editing && user?.role === 'hr_admin' && (
-                  <button
-                    type="button"
-                    onClick={deleteEmployee}
-                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    title="Permanently delete this employee"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                    Delete
-                  </button>
+                {activeTab !== 'leaves' && (
+                  <>
+                    {editing && user?.role === 'hr_admin' && (
+                      <button type="button" onClick={deleteEmployee}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                        <TrashIcon className="h-4 w-4" /> Delete
+                      </button>
+                    )}
+                    <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setShowForm(false)}>Cancel</button>
+                    <button type="submit" className="btn-primary flex-1 justify-center" disabled={submitting}>
+                      {submitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Employee'}
+                    </button>
+                  </>
                 )}
-                <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="btn-primary flex-1 justify-center" disabled={submitting}>
-                  {submitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Employee'}
-                </button>
+                {activeTab === 'leaves' && (
+                  <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setShowForm(false)}>Close</button>
+                )}
               </div>
             </form>
           </div>
