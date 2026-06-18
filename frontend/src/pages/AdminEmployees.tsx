@@ -104,8 +104,7 @@ export default function AdminEmployees() {
       .finally(() => setLeavesLoading(false));
   };
 
-  const submitHistoricalLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitHistoricalLeave = async () => {
     if (!editing) return;
     setAddLeaveMsg(null);
     setAddingLeave(true);
@@ -150,8 +149,7 @@ export default function AdminEmployees() {
     setAddLeaveMsg(null);
   };
 
-  const submitEditLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitEditLeave = async () => {
     if (!editingLeave || !editing) return;
     setAddingLeave(true);
     setAddLeaveMsg(null);
@@ -171,8 +169,7 @@ export default function AdminEmployees() {
     } finally { setAddingLeave(false); }
   };
 
-  const submitHistoricalPt = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitHistoricalPt = async () => {
     if (!editing) return;
     setAddLeaveMsg(null);
     setAddingLeave(true);
@@ -803,7 +800,7 @@ export default function AdminEmployees() {
                     {/* Add Leave form */}
                     <div className="border border-gray-200 rounded-xl p-4 space-y-4">
                       <p className="text-sm font-semibold text-gray-700">Add Leave Entry</p>
-                      <form onSubmit={submitHistoricalLeave} className="space-y-3">
+                      <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="label">Leave Type</label>
@@ -874,16 +871,16 @@ export default function AdminEmployees() {
                           <input type="text" className="input" placeholder="Historical data, offline approval…"
                             value={addLeaveForm.reason} onChange={e => setAddLeaveForm(f => ({ ...f, reason: e.target.value }))} />
                         </div>
-                        <button type="submit" className="btn-primary w-full justify-center" disabled={addingLeave}>
+                        <button type="button" onClick={submitHistoricalLeave} className="btn-primary w-full justify-center" disabled={addingLeave}>
                           {addingLeave ? 'Saving…' : 'Add Leave Entry (Auto-Approved)'}
                         </button>
-                      </form>
+                      </div>
                     </div>
 
                     {/* Add Personal Time form */}
                     <div className="border border-gray-200 rounded-xl p-4 space-y-4">
                       <p className="text-sm font-semibold text-gray-700">Add Personal Time Entry</p>
-                      <form onSubmit={submitHistoricalPt} className="space-y-3">
+                      <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="label">Date *</label>
@@ -903,10 +900,10 @@ export default function AdminEmployees() {
                           <input type="text" className="input" placeholder="Historical data…"
                             value={addPtForm.reason} onChange={e => setAddPtForm(f => ({ ...f, reason: e.target.value }))} />
                         </div>
-                        <button type="submit" className="btn-primary w-full justify-center" disabled={addingLeave}>
+                        <button type="button" onClick={submitHistoricalPt} className="btn-primary w-full justify-center" disabled={addingLeave}>
                           {addingLeave ? 'Saving…' : 'Add Personal Time Entry (Auto-Approved)'}
                         </button>
-                      </form>
+                      </div>
                     </div>
 
                     {/* Inline edit form */}
@@ -917,7 +914,7 @@ export default function AdminEmployees() {
                           <button type="button" onClick={() => setEditingLeave(null)}
                             className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-4 w-4" /></button>
                         </div>
-                        <form onSubmit={submitEditLeave} className="space-y-3">
+                        <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="label">Leave Type</label>
@@ -985,11 +982,11 @@ export default function AdminEmployees() {
                           </div>
                           <div className="flex gap-2">
                             <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setEditingLeave(null)}>Cancel</button>
-                            <button type="submit" className="btn-primary flex-1 justify-center" disabled={addingLeave}>
+                            <button type="button" onClick={submitEditLeave} className="btn-primary flex-1 justify-center" disabled={addingLeave}>
                               {addingLeave ? 'Saving…' : 'Save Changes'}
                             </button>
                           </div>
-                        </form>
+                        </div>
                       </div>
                     )}
 
