@@ -362,6 +362,88 @@ router.get('/meta/calendar', auth, (req, res) => {
   res.json(rows);
 });
 
+// ── DELETE /leaves/:id/admin — HR Admin hard-delete a leave record ────────────
+router.delete('/:id/admin', auth, rbac('hr_admin'), (req, res) => {
+  const row = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+
+  const employee = db.prepare('SELECT hire_date FROM employees WHERE id=?').get(row.employee_id);
+  const rollover = engine.getRolloverPeriod(employee.hire_date, row.start_date);
+
+  // Reverse balance effect
+  if (row.status === 'approved') {
+    db.prepare(`UPDATE leave_balances SET
+      used_paid=MAX(0,used_paid-?), used_half=MAX(0,used_half-?), used_unpaid=MAX(0,used_unpaid-?),
+      updated_at=datetime('now') WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(row.paid_days||0, row.half_pay_days||0, row.unpaid_days||0,
+           row.employee_id, row.leave_type, rollover.year);
+  } else if (row.status === 'pending') {
+    db.prepare(`UPDATE leave_balances SET pending=MAX(0,pending-?), updated_at=datetime('now')
+      WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(row.total_days, row.employee_id, row.leave_type, rollover.year);
+  }
+
+  db.prepare('DELETE FROM leave_requests WHERE id=?').run(row.id);
+  db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)')
+    .run(uuidv4(), req.user.id, 'admin_delete', 'leave_request', row.id);
+
+  res.json({ message: 'Leave record deleted and balance reversed' });
+});
+
+// ── PATCH /leaves/:id/admin — HR Admin edit a leave record ────────────────────
+router.patch('/:id/admin', auth, rbac('hr_admin'), (req, res) => {
+  const row = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+
+  const employee = db.prepare('SELECT hire_date FROM employees WHERE id=?').get(row.employee_id);
+  const rollover = engine.getRolloverPeriod(employee.hire_date, row.start_date);
+
+  const {
+    leave_type, sub_type, start_date, end_date,
+    paid_days, half_pay_days, unpaid_days, reason, is_half_day,
+  } = req.body;
+
+  const newPaid   = parseFloat(paid_days   ?? row.paid_days)   || 0;
+  const newHalf   = parseFloat(half_pay_days ?? row.half_pay_days) || 0;
+  const newUnpaid = parseFloat(unpaid_days  ?? row.unpaid_days) || 0;
+  const newTotal  = newPaid + newHalf + newUnpaid || engine.countWorkingDays(start_date || row.start_date, end_date || row.end_date);
+  const newStart  = start_date || row.start_date;
+  const newEnd    = end_date   || row.end_date;
+  const newType   = leave_type || row.leave_type;
+  const newHalfDay = is_half_day !== undefined ? (is_half_day ? 1 : 0) : row.is_half_day;
+
+  // Reverse old balance
+  if (row.status === 'approved') {
+    db.prepare(`UPDATE leave_balances SET
+      used_paid=MAX(0,used_paid-?), used_half=MAX(0,used_half-?), used_unpaid=MAX(0,used_unpaid-?),
+      updated_at=datetime('now') WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(row.paid_days||0, row.half_pay_days||0, row.unpaid_days||0,
+           row.employee_id, row.leave_type, rollover.year);
+  }
+
+  // Apply new balance (ensure row exists for new type/year if type changed)
+  const newRollover = engine.getRolloverPeriod(employee.hire_date, newStart);
+  ensureBalance(row.employee_id, newType, newRollover.year, newRollover.periodStart, newRollover.periodEnd, 0);
+  db.prepare(`UPDATE leave_balances SET
+    used_paid=used_paid+?, used_half=used_half+?, used_unpaid=used_unpaid+?,
+    updated_at=datetime('now') WHERE employee_id=? AND leave_type=? AND year=?`)
+    .run(newPaid, newHalf, newUnpaid, row.employee_id, newType, newRollover.year);
+
+  db.prepare(`UPDATE leave_requests SET
+    leave_type=?, sub_type=?, start_date=?, end_date=?,
+    total_days=?, paid_days=?, half_pay_days=?, unpaid_days=?,
+    reason=?, is_half_day=?, updated_at=datetime('now')
+    WHERE id=?`)
+    .run(newType, sub_type ?? row.sub_type, newStart, newEnd,
+         newTotal, newPaid, newHalf, newUnpaid,
+         reason ?? row.reason, newHalfDay, row.id);
+
+  db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)')
+    .run(uuidv4(), req.user.id, 'admin_edit', 'leave_request', row.id);
+
+  res.json({ message: 'Leave record updated', totalDays: newTotal, paid: newPaid, half: newHalf, unpaid: newUnpaid });
+});
+
 // ── POST /leaves/admin/backdate — HR Admin historical data entry ───────────────
 router.post('/admin/backdate', auth, rbac('hr_admin'), (req, res) => {
   const {

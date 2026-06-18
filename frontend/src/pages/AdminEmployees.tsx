@@ -85,13 +85,17 @@ export default function AdminEmployees() {
   // Leave Records tab state
   const [empLeaves, setEmpLeaves] = useState<any[]>([]);
   const [leavesLoading, setLeavesLoading] = useState(false);
-  const [addLeaveForm, setAddLeaveForm] = useState({
+  const BLANK_ADD_LEAVE = {
     leave_type: 'annual', sub_type: '', start_date: '', end_date: '',
-    paid_days: '', half_pay_days: '', unpaid_days: '', reason: '',
-  });
+    paid_days: '', half_pay_days: '', unpaid_days: '', reason: '', is_half_day: false,
+  };
+  const [addLeaveForm, setAddLeaveForm] = useState({ ...BLANK_ADD_LEAVE });
   const [addPtForm, setAddPtForm] = useState({ log_date: '', hours_used: '', reason: '' });
   const [addLeaveMsg, setAddLeaveMsg] = useState<{ type: 'success'|'error'; msg: string }|null>(null);
   const [addingLeave, setAddingLeave] = useState(false);
+  // Edit mode for an existing leave record
+  const [editingLeave, setEditingLeave] = useState<any | null>(null);
+  const [editLeaveForm, setEditLeaveForm] = useState<any>({});
 
   const loadEmpLeaves = (empId: string) => {
     setLeavesLoading(true);
@@ -110,12 +114,60 @@ export default function AdminEmployees() {
       if (!payload.end_date) payload.end_date = payload.start_date;
       if (!payload.sub_type) delete payload.sub_type;
       ['paid_days','half_pay_days','unpaid_days'].forEach(k => { if (!payload[k]) delete payload[k]; });
+      // Half-day: force 0.5 paid, clear others
+      if (payload.is_half_day) {
+        payload.paid_days = 0.5; delete payload.half_pay_days; delete payload.unpaid_days;
+      }
       const res = await api.post('/leaves/admin/backdate', payload);
       setAddLeaveMsg({ type: 'success', msg: `Added: ${res.data.totalDays} day(s) — ${res.data.paid}d paid, ${res.data.half}d half, ${res.data.unpaid}d unpaid` });
-      setAddLeaveForm({ leave_type: 'annual', sub_type: '', start_date: '', end_date: '', paid_days: '', half_pay_days: '', unpaid_days: '', reason: '' });
+      setAddLeaveForm({ ...BLANK_ADD_LEAVE });
       loadEmpLeaves(editing.id);
     } catch (err: any) {
       setAddLeaveMsg({ type: 'error', msg: err.response?.data?.error || 'Failed to add leave entry' });
+    } finally { setAddingLeave(false); }
+  };
+
+  const deleteLeave = async (leaveId: string) => {
+    if (!confirm('Delete this leave record? The balance will be reversed automatically.')) return;
+    try {
+      await api.delete(`/leaves/${leaveId}/admin`);
+      setAddLeaveMsg({ type: 'success', msg: 'Leave record deleted and balance reversed.' });
+      if (editing) loadEmpLeaves(editing.id);
+    } catch (err: any) {
+      setAddLeaveMsg({ type: 'error', msg: err.response?.data?.error || 'Delete failed' });
+    }
+  };
+
+  const startEditLeave = (leave: any) => {
+    setEditingLeave(leave);
+    setEditLeaveForm({
+      leave_type: leave.leave_type, sub_type: leave.sub_type || '',
+      start_date: leave.start_date, end_date: leave.end_date,
+      paid_days: String(leave.paid_days || ''), half_pay_days: String(leave.half_pay_days || ''),
+      unpaid_days: String(leave.unpaid_days || ''), reason: leave.reason || '',
+      is_half_day: !!leave.is_half_day,
+    });
+    setAddLeaveMsg(null);
+  };
+
+  const submitEditLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLeave || !editing) return;
+    setAddingLeave(true);
+    setAddLeaveMsg(null);
+    try {
+      const payload: any = { ...editLeaveForm };
+      if (!payload.sub_type) delete payload.sub_type;
+      ['paid_days','half_pay_days','unpaid_days'].forEach(k => { if (!payload[k]) delete payload[k]; });
+      if (payload.is_half_day) {
+        payload.paid_days = 0.5; delete payload.half_pay_days; delete payload.unpaid_days;
+      }
+      const res = await api.patch(`/leaves/${editingLeave.id}/admin`, payload);
+      setAddLeaveMsg({ type: 'success', msg: `Updated: ${res.data.totalDays} day(s) — ${res.data.paid}d paid, ${res.data.half}d half, ${res.data.unpaid}d unpaid` });
+      setEditingLeave(null);
+      loadEmpLeaves(editing.id);
+    } catch (err: any) {
+      setAddLeaveMsg({ type: 'error', msg: err.response?.data?.error || 'Update failed' });
     } finally { setAddingLeave(false); }
   };
 
@@ -757,7 +809,7 @@ export default function AdminEmployees() {
                             <label className="label">Leave Type</label>
                             <select className="input" value={addLeaveForm.leave_type}
                               onChange={e => setAddLeaveForm(f => ({ ...f, leave_type: e.target.value, sub_type: '' }))}>
-                              {[['annual','Annual'],['sick','Sick'],['maternity','Maternity'],
+                              {[['annual','Annual'],['sick','Sick'],['personal','Personal Time'],['maternity','Maternity'],
                                 ['parental','Parental'],['compassionate','Compassionate'],
                                 ['study','Study'],['unpaid','Unpaid']].map(([v,l]) =>
                                 <option key={v} value={v}>{l}</option>)}
@@ -780,30 +832,43 @@ export default function AdminEmployees() {
                               value={addLeaveForm.start_date} min="2025-01-01" max={dayjs().format('YYYY-MM-DD')}
                               onChange={e => setAddLeaveForm(f => ({ ...f, start_date: e.target.value, end_date: f.end_date || e.target.value }))} />
                           </div>
-                          <div>
-                            <label className="label">End Date</label>
-                            <input type="date" className="input"
-                              value={addLeaveForm.end_date} min={addLeaveForm.start_date || '2025-01-01'} max={dayjs().format('YYYY-MM-DD')}
-                              onChange={e => setAddLeaveForm(f => ({ ...f, end_date: e.target.value }))} />
-                          </div>
+                          {!addLeaveForm.is_half_day && (
+                            <div>
+                              <label className="label">End Date</label>
+                              <input type="date" className="input"
+                                value={addLeaveForm.end_date} min={addLeaveForm.start_date || '2025-01-01'} max={dayjs().format('YYYY-MM-DD')}
+                                onChange={e => setAddLeaveForm(f => ({ ...f, end_date: e.target.value }))} />
+                            </div>
+                          )}
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Full-pay days <span className="text-gray-400">(blank=auto)</span></label>
-                            <input type="number" className="input" placeholder="auto" min="0" step="0.5"
-                              value={addLeaveForm.paid_days} onChange={e => setAddLeaveForm(f => ({ ...f, paid_days: e.target.value }))} />
+
+                        {/* Half-day toggle */}
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={addLeaveForm.is_half_day}
+                            onChange={e => setAddLeaveForm(f => ({ ...f, is_half_day: e.target.checked, paid_days: e.target.checked ? '0.5' : '', half_pay_days: '', unpaid_days: '' }))}
+                            className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+                          <span className="text-sm text-gray-700 font-medium">Half day (0.5 days — full pay)</span>
+                        </label>
+
+                        {!addLeaveForm.is_half_day && (
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Full-pay days <span className="text-gray-400">(blank=auto)</span></label>
+                              <input type="number" className="input" placeholder="auto" min="0" step="0.5"
+                                value={addLeaveForm.paid_days} onChange={e => setAddLeaveForm(f => ({ ...f, paid_days: e.target.value }))} />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Half-pay days</label>
+                              <input type="number" className="input" placeholder="0" min="0" step="0.5"
+                                value={addLeaveForm.half_pay_days} onChange={e => setAddLeaveForm(f => ({ ...f, half_pay_days: e.target.value }))} />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Unpaid days</label>
+                              <input type="number" className="input" placeholder="0" min="0" step="0.5"
+                                value={addLeaveForm.unpaid_days} onChange={e => setAddLeaveForm(f => ({ ...f, unpaid_days: e.target.value }))} />
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Half-pay days</label>
-                            <input type="number" className="input" placeholder="0" min="0" step="0.5"
-                              value={addLeaveForm.half_pay_days} onChange={e => setAddLeaveForm(f => ({ ...f, half_pay_days: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Unpaid days</label>
-                            <input type="number" className="input" placeholder="0" min="0" step="0.5"
-                              value={addLeaveForm.unpaid_days} onChange={e => setAddLeaveForm(f => ({ ...f, unpaid_days: e.target.value }))} />
-                          </div>
-                        </div>
+                        )}
                         <div>
                           <label className="label">Notes</label>
                           <input type="text" className="input" placeholder="Historical data, offline approval…"
@@ -844,6 +909,90 @@ export default function AdminEmployees() {
                       </form>
                     </div>
 
+                    {/* Inline edit form */}
+                    {editingLeave && (
+                      <div className="border-2 border-brand-300 rounded-xl p-4 space-y-3 bg-brand-50">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-brand-800">Editing leave record</p>
+                          <button type="button" onClick={() => setEditingLeave(null)}
+                            className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-4 w-4" /></button>
+                        </div>
+                        <form onSubmit={submitEditLeave} className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="label">Leave Type</label>
+                              <select className="input" value={editLeaveForm.leave_type}
+                                onChange={e => setEditLeaveForm((f: any) => ({ ...f, leave_type: e.target.value }))}>
+                                {[['annual','Annual'],['sick','Sick'],['personal','Personal Time'],['maternity','Maternity'],
+                                  ['parental','Parental'],['compassionate','Compassionate'],
+                                  ['study','Study'],['unpaid','Unpaid']].map(([v,l]) =>
+                                  <option key={v} value={v}>{l}</option>)}
+                              </select>
+                            </div>
+                            {editLeaveForm.leave_type === 'compassionate' && (
+                              <div>
+                                <label className="label">Relationship</label>
+                                <select className="input" value={editLeaveForm.sub_type}
+                                  onChange={e => setEditLeaveForm((f: any) => ({ ...f, sub_type: e.target.value }))}>
+                                  <option value="">Select…</option>
+                                  {['spouse','parent','child','sibling','grandparent','grandchild'].map(s =>
+                                    <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            <div>
+                              <label className="label">Start Date</label>
+                              <input type="date" className="input" value={editLeaveForm.start_date} min="2025-01-01" max={dayjs().format('YYYY-MM-DD')}
+                                onChange={e => setEditLeaveForm((f: any) => ({ ...f, start_date: e.target.value }))} />
+                            </div>
+                            {!editLeaveForm.is_half_day && (
+                              <div>
+                                <label className="label">End Date</label>
+                                <input type="date" className="input" value={editLeaveForm.end_date} min={editLeaveForm.start_date} max={dayjs().format('YYYY-MM-DD')}
+                                  onChange={e => setEditLeaveForm((f: any) => ({ ...f, end_date: e.target.value }))} />
+                              </div>
+                            )}
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" checked={!!editLeaveForm.is_half_day}
+                              onChange={e => setEditLeaveForm((f: any) => ({ ...f, is_half_day: e.target.checked, paid_days: e.target.checked ? '0.5' : f.paid_days, half_pay_days: e.target.checked ? '' : f.half_pay_days, unpaid_days: e.target.checked ? '' : f.unpaid_days }))}
+                              className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+                            <span className="text-sm text-gray-700 font-medium">Half day (0.5 days)</span>
+                          </label>
+                          {!editLeaveForm.is_half_day && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Full-pay days</label>
+                                <input type="number" className="input" min="0" step="0.5" value={editLeaveForm.paid_days}
+                                  onChange={e => setEditLeaveForm((f: any) => ({ ...f, paid_days: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Half-pay days</label>
+                                <input type="number" className="input" min="0" step="0.5" value={editLeaveForm.half_pay_days}
+                                  onChange={e => setEditLeaveForm((f: any) => ({ ...f, half_pay_days: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">Unpaid days</label>
+                                <input type="number" className="input" min="0" step="0.5" value={editLeaveForm.unpaid_days}
+                                  onChange={e => setEditLeaveForm((f: any) => ({ ...f, unpaid_days: e.target.value }))} />
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <label className="label">Notes</label>
+                            <input type="text" className="input" value={editLeaveForm.reason}
+                              onChange={e => setEditLeaveForm((f: any) => ({ ...f, reason: e.target.value }))} />
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setEditingLeave(null)}>Cancel</button>
+                            <button type="submit" className="btn-primary flex-1 justify-center" disabled={addingLeave}>
+                              {addingLeave ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
                     {/* Existing leave history */}
                     <div>
                       <p className="text-sm font-semibold text-gray-700 mb-2">Existing Leave Records</p>
@@ -854,23 +1003,38 @@ export default function AdminEmployees() {
                       ) : empLeaves.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-4">No leave records found.</p>
                       ) : (
-                        <div className="space-y-1 max-h-64 overflow-y-auto">
+                        <div className="space-y-1 max-h-72 overflow-y-auto">
                           {empLeaves.map((l: any) => (
-                            <div key={l.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
+                            <div key={l.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${editingLeave?.id === l.id ? 'bg-brand-50 border border-brand-200' : 'bg-gray-50'}`}>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize flex-shrink-0 ${LEAVE_TYPE_BADGE[l.leave_type] || 'bg-gray-100 text-gray-700'}`}>
                                   {l.leave_type}
                                 </span>
                                 <span className="text-gray-600 text-xs whitespace-nowrap">
                                   {dayjs(l.start_date).format('D MMM YY')} – {dayjs(l.end_date).format('D MMM YY')}
                                 </span>
-                                <span className="text-gray-400 text-xs">{l.total_days}d</span>
+                                <span className="text-gray-500 text-xs font-medium">{l.total_days}d</span>
+                                {l.is_half_day ? <span className="text-xs text-purple-600 bg-purple-50 px-1.5 rounded-full">½</span> : null}
+                                {l.half_pay_days > 0 ? <span className="text-xs text-amber-600">({l.half_pay_days}d half-pay)</span> : null}
+                                {l.unpaid_days > 0 ? <span className="text-xs text-red-500">({l.unpaid_days}d unpaid)</span> : null}
                               </div>
-                              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
-                                l.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                l.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
-                                l.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
-                              }`}>{l.status}</span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  l.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                  l.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                                  l.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
+                                }`}>{l.status}</span>
+                                <button type="button" title="Edit"
+                                  onClick={() => startEditLeave(l)}
+                                  className="text-xs text-brand-600 hover:text-brand-800 px-1.5 py-0.5 rounded hover:bg-brand-50 transition-colors">
+                                  Edit
+                                </button>
+                                <button type="button" title="Delete"
+                                  onClick={() => deleteLeave(l.id)}
+                                  className="text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors">
+                                  Del
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
