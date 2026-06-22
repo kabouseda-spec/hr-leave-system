@@ -12,6 +12,7 @@ import AdminReports from './pages/AdminReports';
 import AdminHolidays from './pages/AdminHolidays';
 import AdminDeductions from './pages/AdminDeductions';
 import AdminHistorical from './pages/AdminHistorical';
+import EmployeeLeaves from './pages/EmployeeLeaves';
 import PaySlip from './pages/PaySlip';
 import PersonalTime from './pages/PersonalTime';
 import Profile from './pages/Profile';
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="leave/request" element={<LeaveRequest />} />
         <Route path="leave/history" element={<LeaveHistory />} />
         <Route path="leave/approvals" element={<ProtectedRoute roles={['manager','hr_admin']}><Approvals /></ProtectedRoute>} />
+        <Route path="leave/employee-leaves" element={<ProtectedRoute roles={['manager','hr_admin']}><EmployeeLeaves /></ProtectedRoute>} />
         <Route path="calendar" element={<TeamCalendar />} />
         <Route path="personal-time" element={<PersonalTime />} />
         <Route path="payslip" element={<PaySlip />} />

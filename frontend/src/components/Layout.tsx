@@ -4,7 +4,7 @@ import {
   HomeIcon, CalendarDaysIcon, ClockIcon, UsersIcon,
   ChartBarIcon, BellIcon, UserCircleIcon, ArrowRightOnRectangleIcon,
   CheckCircleIcon, DocumentPlusIcon, SunIcon, BanknotesIcon, DocumentTextIcon as PayslipIcon,
-  ArchiveBoxIcon,
+  ArchiveBoxIcon, ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import api from '../api/client';
@@ -66,6 +66,7 @@ export default function Layout() {
                 <p className="text-blue-300 text-xs font-semibold uppercase tracking-wider px-3">Management</p>
               </div>
               <NavItem to="/leave/approvals" icon={CheckCircleIcon} label="Approvals" />
+              <NavItem to="/leave/employee-leaves" icon={ClipboardDocumentListIcon} label="Employee Leaves" />
               <NavItem to="/admin/reports" icon={ChartBarIcon} label="Reports" />
               {user?.role === 'hr_admin' && (
                 <NavItem to="/admin/deductions" icon={BanknotesIcon} label="Deductions" />
