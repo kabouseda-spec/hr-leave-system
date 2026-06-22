@@ -44,6 +44,8 @@ const migrations = [
   // leave_requests
   "ALTER TABLE leave_requests ADD COLUMN sub_type TEXT",
   "ALTER TABLE leave_requests ADD COLUMN certificate_path TEXT",
+  "ALTER TABLE leave_requests ADD COLUMN manager_approved_by TEXT",
+  "ALTER TABLE leave_requests ADD COLUMN manager_approved_at TEXT",
   // leave_balances
   "ALTER TABLE leave_balances ADD COLUMN period_start TEXT",
   "ALTER TABLE leave_balances ADD COLUMN period_end TEXT",

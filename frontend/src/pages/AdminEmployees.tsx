@@ -38,7 +38,7 @@ interface FamilyMember {
 const DEPARTMENTS = [
   'Top Management', 'HR', 'Engineering', 'AI', 'Design',
   'Accounting', 'Finance', 'Sales', 'Sales Admin', 'Marketing',
-  'Shipping', 'Logistics', 'Operations', 'Execution', 'Legal',
+  'Shipping', 'Logistics', 'Operations', 'Execution', 'Legal', 'KMCI',
 ];
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

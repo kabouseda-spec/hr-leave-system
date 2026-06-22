@@ -46,22 +46,30 @@ router.get('/', auth, (req, res) => {
 
   if (req.user.role === 'employee') {
     where.push('lr.employee_id = ?'); params.push(req.user.id);
+  } else if (employee_id) {
+    // employee_id param always takes precedence for any non-employee role
+    where.push('lr.employee_id = ?'); params.push(employee_id);
   } else if (req.user.role === 'manager') {
     where.push('e.manager_id = ?'); params.push(req.user.id);
-  } else if (employee_id) {
-    where.push('lr.employee_id = ?'); params.push(employee_id);
   }
+  // hr_admin with no employee_id: see all
 
   if (status) { where.push('lr.status = ?'); params.push(status); }
+  // When managers look at pending requests, only show ones they haven't pre-approved yet
+  if (status === 'pending' && req.user.role === 'manager') {
+    where.push('lr.manager_approved_by IS NULL');
+  }
   if (year)   { where.push("strftime('%Y', lr.start_date) = ?"); params.push(String(year)); }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const rows = db.prepare(`
-    SELECT lr.*, e.full_name, e.department, e.employee_number,
-           a.full_name AS approved_by_name
+    SELECT lr.*, e.full_name, e.department, e.employee_number, e.manager_id,
+           a.full_name AS approved_by_name,
+           m.full_name AS manager_approved_by_name
     FROM leave_requests lr
     JOIN employees e ON e.id = lr.employee_id
     LEFT JOIN employees a ON a.id = lr.approved_by
+    LEFT JOIN employees m ON m.id = lr.manager_approved_by
     ${whereClause}
     ORDER BY lr.created_at DESC
   `).all(...params);
@@ -176,15 +184,38 @@ router.get('/:id', auth, (req, res) => {
 
 // ── PATCH /leaves/:id/approve ─────────────────────────────────────────────────
 router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
-  const row = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id);
+  const row = db.prepare(`
+    SELECT lr.*, e.manager_id, e.full_name AS employee_name, e.email AS employee_email
+    FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id
+    WHERE lr.id=?
+  `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   if (row.status !== 'pending') return res.status(400).json({ error: 'Request is not pending' });
 
   if (req.user.role === 'manager') {
-    const emp = db.prepare('SELECT manager_id FROM employees WHERE id=?').get(row.employee_id);
-    if (emp.manager_id !== req.user.id) return res.status(403).json({ error: 'Not your team member' });
+    // Manager pre-approves: set manager_approved_by, status stays pending
+    if (row.manager_id !== req.user.id) return res.status(403).json({ error: 'Not your team member' });
+
+    db.prepare(`UPDATE leave_requests SET manager_approved_by=?, manager_approved_at=datetime('now'),
+      updated_at=datetime('now') WHERE id=?`).run(req.user.id, row.id);
+
+    // Notify HR admins that manager has approved — ready for final review
+    const mgr = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
+    const hrAdmins = db.prepare("SELECT id FROM employees WHERE role='hr_admin' AND is_active=1").all();
+    hrAdmins.forEach(hr => {
+      db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
+        .run(uuidv4(), hr.id,
+          `📋 ${row.employee_name}'s ${row.leave_type} leave (${row.start_date}–${row.end_date}) pre-approved by ${mgr?.full_name || 'manager'}. Awaiting HR final approval.`,
+          'leave_request');
+    });
+
+    db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)')
+      .run(uuidv4(), req.user.id, 'manager_pre_approve', 'leave_request', row.id);
+
+    return res.json({ message: 'Pre-approved. Awaiting HR final approval.' });
   }
 
+  // HR Admin: final approval — updates balance and status
   const employee = db.prepare('SELECT hire_date FROM employees WHERE id=?').get(row.employee_id);
   const rollover = engine.getRolloverPeriod(employee.hire_date, row.start_date);
 
@@ -197,13 +228,6 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
     .run(row.total_days, row.paid_days, row.half_pay_days, row.unpaid_days,
          row.employee_id, row.leave_type, rollover.year);
 
-  // Commit personal time balance if applicable
-  if (row.leave_type === 'personal' && row.hours) {
-    const period = engine.getPersonalTimePeriod(row.start_date);
-    db.prepare('UPDATE personal_time_balances SET used=used+? WHERE employee_id=? AND period=?')
-      .run(row.hours, row.employee_id, period);
-  }
-
   db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
     .run(uuidv4(), row.employee_id,
         `✅ Your ${row.leave_type} leave (${row.start_date} – ${row.end_date}) has been approved.`, 'leave_approved');
@@ -211,19 +235,17 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
   db.prepare('INSERT INTO audit_log (id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)')
     .run(uuidv4(), req.user.id, 'approve', 'leave_request', row.id);
 
-  // Email the employee
-  const empApprove = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(row.employee_id);
-  const approver   = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
-  if (empApprove?.email) {
+  const approver = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
+  if (row.employee_email) {
     const tpl = leaveApprovedEmail({
-      employeeName: empApprove.full_name,
+      employeeName: row.employee_name,
       leaveType: row.leave_type,
       startDate: row.start_date,
       endDate: row.end_date,
       totalDays: row.total_days,
-      approvedByName: approver?.full_name || 'Your Manager',
+      approvedByName: approver?.full_name || 'HR Admin',
     });
-    sendEmail({ to: empApprove.email, ...tpl });
+    sendEmail({ to: row.employee_email, ...tpl });
   }
 
   res.json({ message: 'Approved' });

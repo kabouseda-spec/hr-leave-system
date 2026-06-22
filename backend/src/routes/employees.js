@@ -14,7 +14,7 @@ const n = v => (!v || v === 'undefined' || v === 'null' ? null : v);
 const DEPARTMENTS = [
   'Top Management', 'HR', 'Engineering', 'AI', 'Design',
   'Accounting', 'Finance', 'Sales', 'Sales Admin', 'Marketing',
-  'Shipping', 'Logistics', 'Operations', 'Execution', 'Legal',
+  'Shipping', 'Logistics', 'Operations', 'Execution', 'Legal', 'KMCI',
 ];
 
 // List employees
@@ -191,7 +191,12 @@ router.get('/:id/balances', auth, (req, res) => {
     ORDER BY lp.label
   `).all(req.params.id, rollover.year);
 
-  res.json({ balances, rollover });
+  // Include current personal time period balance separately
+  const ptPeriod = engine.getPersonalTimePeriod(dayjs().format('YYYY-MM-DD'));
+  const personalTime = db.prepare('SELECT * FROM personal_time_balances WHERE employee_id=? AND period=?')
+    .get(req.params.id, ptPeriod) || null;
+
+  res.json({ balances, rollover, personalTime });
 });
 
 // HR Admin balance override

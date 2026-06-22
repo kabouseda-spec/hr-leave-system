@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
 import { CheckIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 interface LeaveRequest {
   id: string;
   full_name: string;
   department: string;
   employee_number: string;
+  manager_id: string | null;
   leave_type: string;
   start_date: string;
   end_date: string;
@@ -18,9 +20,13 @@ interface LeaveRequest {
   reason: string;
   created_at: string;
   status: string;
+  manager_approved_by: string | null;
+  manager_approved_by_name: string | null;
 }
 
 export default function Approvals() {
+  const { user } = useAuth();
+  const isHrAdmin = user?.role === 'hr_admin';
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
@@ -124,16 +130,38 @@ export default function Approvals() {
                   )}
 
                   <p className="text-xs text-gray-400 mt-2">Submitted {dayjs(r.created_at).format('D MMM YYYY, HH:mm')}</p>
+
+                  {/* Manager approval status badge — visible to HR admin */}
+                  {isHrAdmin && r.status === 'pending' && (
+                    <div className="mt-2">
+                      {r.manager_approved_by_name ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full font-medium">
+                          <CheckIcon className="h-3 w-3" /> Manager approved: {r.manager_approved_by_name}
+                        </span>
+                      ) : r.manager_id ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
+                          ⏳ Awaiting manager approval
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs bg-gray-50 text-gray-500 border border-gray-200 px-2.5 py-1 rounded-full font-medium">
+                          No manager assigned
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {r.status === 'pending' && (
                   <div className="flex gap-2 flex-shrink-0">
+                    {/* Managers: pre-approve (will be finalized by HR admin) */}
+                    {/* HR admins: final approve */}
                     <button
                       className="btn-primary py-1.5"
                       onClick={() => approve(r.id)}
                       disabled={actionId === r.id}
+                      title={isHrAdmin ? 'Final approval' : 'Pre-approve — HR admin will finalize'}
                     >
-                      <CheckIcon className="h-4 w-4" /> Approve
+                      <CheckIcon className="h-4 w-4" /> {isHrAdmin ? 'Approve' : 'Pre-Approve'}
                     </button>
                     <button
                       className="btn-danger py-1.5"

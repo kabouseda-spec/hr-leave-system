@@ -36,19 +36,14 @@ export default function PersonalTime() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  // For managers: pending PT logs
-  const [pendingLogs, setPendingLogs] = useState<PTLog[]>([]);
-
   const load = () => {
     setLoading(true);
     Promise.all([
       api.get('/personal-time/balances'),
       api.get('/personal-time'),
-      (user!.role !== 'employee') ? api.get('/personal-time?status=pending') : Promise.resolve({ data: [] }),
-    ]).then(([b, l, p]) => {
+    ]).then(([b, l]) => {
       setBalances(b.data);
       setLogs(l.data);
-      setPendingLogs(p.data);
     }).finally(() => setLoading(false));
   };
 
@@ -68,11 +63,6 @@ export default function PersonalTime() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const action = async (id: string, act: 'approve' | 'reject') => {
-    await api.patch(`/personal-time/${id}/${act}`);
-    load();
   };
 
   const currentPeriod = dayjs().month() < 6 ? `${dayjs().year()}-H1` : `${dayjs().year()}-H2`;
@@ -176,9 +166,12 @@ export default function PersonalTime() {
                 className="input"
                 value={form.log_date}
                 onChange={e => setForm(f => ({ ...f, log_date: e.target.value }))}
+                min={dayjs().format('YYYY-MM-DD')}
                 max={dayjs().format('YYYY-MM-DD')}
+                readOnly
                 required
               />
+              <p className="text-xs text-gray-400 mt-1">Personal time can only be logged for today</p>
             </div>
             <div>
               <label className="label">Hours Used</label>
@@ -271,26 +264,6 @@ export default function PersonalTime() {
         </div>
       )}
 
-      {/* Manager: pending PT approvals */}
-      {user!.role !== 'employee' && pendingLogs.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Pending Personal Time Approvals</h2>
-          <div className="space-y-2">
-            {pendingLogs.map(l => (
-              <div key={l.id} className="card flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{l.full_name}</p>
-                  <p className="text-sm text-gray-500">{dayjs(l.log_date).format('D MMM YYYY')} · {l.hours_used}h · {l.reason || '—'}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="btn-primary py-1.5 text-xs" onClick={() => action(l.id, 'approve')}>Approve</button>
-                  <button className="btn-danger py-1.5 text-xs" onClick={() => action(l.id, 'reject')}>Reject</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

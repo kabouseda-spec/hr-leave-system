@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 interface LeaveRequest {
   id: string;
+  employee_id: string;
+  full_name: string;
   leave_type: string;
   start_date: string;
   end_date: string;
@@ -48,6 +51,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function MyLeaves() {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(dayjs().year());
@@ -56,8 +60,12 @@ function MyLeaves() {
 
   const load = () => {
     setLoading(true);
-    api.get(`/leaves?year=${year}${statusFilter ? `&status=${statusFilter}` : ''}`)
-      .then(r => setLeaves(r.data))
+    api.get(`/leaves?year=${year}&employee_id=${user!.id}${statusFilter ? `&status=${statusFilter}` : ''}`)
+      .then(r => {
+        // Client-side safety: only show own leaves regardless of server response
+        const own = (r.data as any[]).filter((l: any) => l.employee_id === user!.id);
+        setLeaves(own);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -101,7 +109,7 @@ function MyLeaves() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Type', 'From', 'To', 'Days', 'Full Pay', 'Half Pay', 'Unpaid', 'Status', 'Approved By', ''].map(h => (
+                {['Employee', 'Type', 'From', 'To', 'Days', 'Full Pay', 'Half Pay', 'Unpaid', 'Status', 'Approved By', ''].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -109,6 +117,7 @@ function MyLeaves() {
             <tbody className="divide-y divide-gray-100">
               {leaves.map(l => (
                 <tr key={l.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{l.full_name || '—'}</td>
                   <td className="px-4 py-3 font-medium capitalize">{l.leave_type}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{dayjs(l.start_date).format('D MMM YYYY')}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{dayjs(l.end_date).format('D MMM YYYY')}</td>

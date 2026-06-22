@@ -36,39 +36,38 @@ router.post('/', auth, (req, res) => {
     return res.status(422).json({ error: 'Personal time tracking requires 1 year of service' });
   }
 
+  // Same-day only restriction for employee self-service
+  const today = dayjs().format('YYYY-MM-DD');
+  if (log_date !== today) {
+    return res.status(422).json({ error: 'Personal time can only be logged for today. Contact HR to enter past records.' });
+  }
+
   const period = getPersonalTimePeriod(log_date);
   ensurePeriodBalance(emp.id, period, HOURS_PER_PERIOD);
 
   const balance = db.prepare('SELECT * FROM personal_time_balances WHERE employee_id=? AND period=?')
     .get(emp.id, period);
 
-  const remaining = balance.allocated - balance.used;
-  let deducted = false;
-
-  if (hrs > remaining) {
-    deducted = true;
-  }
+  const newUsed = balance.used + hrs;
+  const isDeducted = newUsed > balance.allocated ? 1 : 0;
+  const remaining = Math.max(0, balance.allocated - balance.used);
 
   const id = uuidv4();
-  db.prepare(`INSERT INTO personal_time_log (id,employee_id,log_date,hours_used,reason,period,status)
-    VALUES (?,?,?,?,?,?,'pending')`)
-    .run(id, emp.id, log_date, hrs, n(reason), period);
+  // Auto-approve immediately — no manager sign-off needed for personal time
+  db.prepare(`INSERT INTO personal_time_log (id,employee_id,log_date,hours_used,reason,period,status,approved_by)
+    VALUES (?,?,?,?,?,?,'approved',?)`)
+    .run(id, emp.id, log_date, hrs, n(reason), period, emp.id);
 
-  // Notify manager
-  if (emp.manager_id) {
-    db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
-      .run(uuidv4(), emp.manager_id,
-        `${emp.full_name} logged ${hrs}h personal time on ${log_date}${deducted ? ' (will exceed limit — salary deduction)' : ''}`,
-        'personal_time');
-  }
+  db.prepare('UPDATE personal_time_balances SET used=?, deducted=? WHERE employee_id=? AND period=?')
+    .run(newUsed, isDeducted, emp.id, period);
 
   res.status(201).json({
     id,
     period,
-    used: balance.used,
-    remaining: Math.max(0, remaining - hrs),
-    willExceedLimit: deducted,
-    message: deducted
+    used: newUsed,
+    remaining: Math.max(0, balance.allocated - newUsed),
+    willExceedLimit: isDeducted === 1,
+    message: isDeducted
       ? `Exceeds ${HOURS_PER_PERIOD}h limit — excess will be deducted from next payroll`
       : 'Personal time logged',
   });

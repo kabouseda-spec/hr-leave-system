@@ -5,7 +5,7 @@ import api from '../api/client';
 import dayjs from 'dayjs';
 import {
   PlusIcon, CheckCircleIcon, DocumentTextIcon,
-  CalendarDaysIcon, ClockIcon, HeartIcon, ExclamationCircleIcon,
+  CalendarDaysIcon, ClockIcon, HeartIcon, ExclamationCircleIcon, ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import PolicyModal from '../components/PolicyModal';
 
@@ -18,6 +18,13 @@ interface Balance {
   used_half: number;
   used_unpaid: number;
   pending: number;
+}
+
+interface PersonalTimeBalance {
+  period: string;
+  allocated: number;
+  used: number;
+  deducted: number;
 }
 
 interface Rollover {
@@ -55,7 +62,49 @@ const BADGE: Record<string, string> = {
   cancelled: 'badge-cancelled',
 };
 
-function LeaveCard({ b, rollover }: { b: Balance; rollover?: Rollover }) {
+function PersonalTimeCard({ pt, onClick }: { pt: PersonalTimeBalance; onClick: () => void }) {
+  const remaining = Math.max(0, pt.allocated - pt.used);
+  const pct = pt.allocated > 0 ? Math.min(100, (pt.used / pt.allocated) * 100) : 0;
+  const barColor = pct >= 90 ? 'bg-red-500' : pct >= 65 ? 'bg-amber-400' : 'bg-purple-500';
+  return (
+    <div
+      className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-purple-300"
+      onClick={onClick}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-purple-50">
+            <ClockIcon className="h-5 w-5 text-purple-600" />
+          </div>
+          <span className="font-semibold text-gray-700 text-sm">Personal Time</span>
+        </div>
+        <ChevronRightIcon className="h-4 w-4 text-gray-300" />
+      </div>
+      <div className="mb-3">
+        <div className="flex items-end gap-1">
+          <span className="text-3xl font-bold text-gray-900">{remaining.toFixed(1)}</span>
+          <span className="text-gray-400 text-sm mb-1">hrs left</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-0.5">of {pt.allocated} hrs — {pt.period}</p>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+        <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 text-xs text-center">
+        <div className="py-1 rounded-lg bg-gray-50">
+          <p className="font-semibold text-gray-700">{pt.used.toFixed(1)}</p>
+          <p className="text-gray-400">Used</p>
+        </div>
+        <div className="py-1 rounded-lg bg-gray-50">
+          <p className={`font-semibold ${pt.deducted ? 'text-red-600' : 'text-gray-700'}`}>{pt.deducted ? 'Yes' : 'None'}</p>
+          <p className="text-gray-400">Deduction</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeaveCard({ b, rollover, onClick }: { b: Balance; rollover?: Rollover; onClick?: () => void }) {
   const isUnpaid = b.leave_type === 'unpaid';
   const isSick   = b.leave_type === 'sick';
   const isHours  = b.unit === 'hours';
@@ -81,7 +130,7 @@ function LeaveCard({ b, rollover }: { b: Balance; rollover?: Rollover }) {
   if (isUnpaid) {
     const daysTaken = totalUsed + b.pending;
     return (
-      <div className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow ${border}`}>
+      <div className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer ${border}`} onClick={onClick}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <div className={`p-2 rounded-lg ${iconBg}`}>
@@ -115,7 +164,7 @@ function LeaveCard({ b, rollover }: { b: Balance; rollover?: Rollover }) {
   }
 
   return (
-    <div className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow ${border}`}>
+    <div className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer ${border}`} onClick={onClick}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div className={`p-2 rounded-lg ${iconBg}`}>
@@ -137,7 +186,6 @@ function LeaveCard({ b, rollover }: { b: Balance; rollover?: Rollover }) {
               <span className="text-3xl font-bold text-gray-900">{totalUsed.toFixed(0)}</span>
               <span className="text-gray-400 text-sm mb-1">days taken</span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">out of 90 days / year</p>
           </>
         ) : (
           <>
@@ -184,6 +232,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [personalTime, setPersonalTime] = useState<PersonalTimeBalance | null>(null);
   const [rollover, setRollover] = useState<Rollover | null>(null);
   const [recentLeaves, setRecentLeaves] = useState<LeaveRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -200,16 +249,18 @@ export default function Dashboard() {
       api.get('/reports/notifications'),
       api.get(`/admin/holidays?year=${dayjs().year()}`),
     ]).then(([balRes, leavesRes, pendingRes, notifRes, holRes]) => {
-      const { balances: b, rollover: r } = balRes.data;
-      // Show annual, sick, personal + unpaid on dashboard
+      const { balances: b, rollover: r, personalTime: pt } = balRes.data;
+      // Show annual, sick, unpaid — personal time is shown via its own card from personal_time_balances
       const shown = (Array.isArray(b) ? b : []).filter((bal: Balance) =>
-        ['annual', 'sick', 'personal', 'unpaid'].includes(bal.leave_type)
+        ['annual', 'sick', 'unpaid'].includes(bal.leave_type)
       );
       setBalances(shown);
+      setPersonalTime(pt || null);
       setRollover(r || null);
       setRecentLeaves(leavesRes.data.slice(0, 5));
       setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
-      setNotifications(notifRes.data.filter((n: any) => !n.read).slice(0, 3));
+      // Show ALL unread notifications (no slice limit)
+      setNotifications(notifRes.data.filter((n: any) => !n.read));
       // Upcoming holidays (next 60 days)
       const today = dayjs();
       const upcoming = (holRes.data || []).filter((h: any) =>
@@ -255,9 +306,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Unread notifications */}
+        {/* Unread notifications — all shown with scroll if many */}
         {notifications.length > 0 && (
-          <div className="space-y-2">
+          <div className={`space-y-2 ${notifications.length > 4 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
             {notifications.map((n: any) => (
               <div key={n.id} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
                 n.type.includes('visa') ? 'bg-orange-50 border-orange-200 text-orange-800' :
@@ -302,14 +353,27 @@ export default function Dashboard() {
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {balances.length === 0 ? (
-              <div className="col-span-3 bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-400">
+            {balances.length === 0 && !personalTime ? (
+              <div className="col-span-4 bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-400">
                 No leave balances found. Contact HR to initialise your account.
               </div>
             ) : (
-              balances.map(b => <LeaveCard key={b.leave_type} b={b} rollover={rollover ?? undefined} />)
+              <>
+                {balances.map(b => (
+                  <LeaveCard
+                    key={b.leave_type}
+                    b={b}
+                    rollover={rollover ?? undefined}
+                    onClick={() => navigate('/leave/history')}
+                  />
+                ))}
+                {personalTime && (
+                  <PersonalTimeCard pt={personalTime} onClick={() => navigate('/personal-time')} />
+                )}
+              </>
             )}
           </div>
+
         </div>
 
         {/* Upcoming holidays */}
