@@ -309,19 +309,40 @@ export default function Dashboard() {
         {/* Unread notifications — all shown with scroll if many */}
         {notifications.length > 0 && (
           <div className={`space-y-2 ${notifications.length > 4 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
-            {notifications.map((n: any) => (
-              <div key={n.id} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
-                n.type.includes('visa') ? 'bg-orange-50 border-orange-200 text-orange-800' :
-                n.type.includes('approved') ? 'bg-green-50 border-green-200 text-green-800' :
-                n.type.includes('rejected') ? 'bg-red-50 border-red-200 text-red-800' :
-                'bg-blue-50 border-blue-200 text-blue-800'
-              }`}>
-                <span className="mt-0.5 flex-shrink-0">
-                  {n.type.includes('visa') ? '⚠️' : n.type.includes('approved') ? '✅' : n.type.includes('rejected') ? '❌' : '📋'}
-                </span>
-                <p>{n.message}</p>
-              </div>
-            ))}
+            {notifications.map((n: any) => {
+              const dest =
+                n.type === 'leave_request'  ? '/leave/approvals' :
+                n.type === 'leave_approved' ? '/leave/history'   :
+                n.type === 'leave_rejected' ? '/leave/history'   :
+                n.type === 'personal_time'  ? '/personal-time'   :
+                n.type?.includes('visa')    ? '/admin/employees' :
+                null;
+              const colorCls =
+                n.type?.includes('visa')     ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                n.type?.includes('approved') ? 'bg-green-50 border-green-200 text-green-800'    :
+                n.type?.includes('rejected') ? 'bg-red-50 border-red-200 text-red-800'          :
+                'bg-blue-50 border-blue-200 text-blue-800';
+              const emoji =
+                n.type?.includes('visa')     ? '⚠️' :
+                n.type?.includes('approved') ? '✅' :
+                n.type?.includes('rejected') ? '❌' : '📋';
+
+              return (
+                <div key={n.id} className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${colorCls}`}>
+                  <span className="flex-shrink-0">{emoji}</span>
+                  <p className="flex-1">{n.message}</p>
+                  {dest && (
+                    <button
+                      onClick={() => navigate(dest)}
+                      className="flex-shrink-0 ml-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-white/60 hover:bg-white border border-current/20 transition-colors whitespace-nowrap flex items-center gap-1"
+                      title="Go to action"
+                    >
+                      View <ChevronRightIcon className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
