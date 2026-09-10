@@ -289,8 +289,19 @@ router.get('/payslip', auth, (req, res) => {
 
 // Notifications
 router.get('/notifications', auth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM notifications WHERE employee_id=? ORDER BY created_at DESC LIMIT 50')
-    .all(req.user.id);
+  // Event-type notifications (birthdays, anniversaries) expire after the day they were created.
+  // Leave-related notifications persist until read.
+  const rows = db.prepare(`
+    SELECT * FROM notifications
+    WHERE employee_id = ?
+      AND (
+        type NOT IN ('employee_birthday','spouse_birthday','child_birthday','sibling_birthday',
+                     'parent_birthday','other_birthday','work_anniversary','marriage_anniversary')
+        OR date(created_at) = date('now')
+      )
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all(req.user.id);
   res.json(rows);
 });
 
