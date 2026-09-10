@@ -15,6 +15,7 @@ import AdminHistorical from './pages/AdminHistorical';
 import EmployeeLeaves from './pages/EmployeeLeaves';
 import PaySlip from './pages/PaySlip';
 import PersonalTime from './pages/PersonalTime';
+import MyDeductions from './pages/MyDeductions';
 import Profile from './pages/Profile';
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="leave/employee-leaves" element={<ProtectedRoute roles={['manager','hr_admin']}><EmployeeLeaves /></ProtectedRoute>} />
         <Route path="calendar" element={<TeamCalendar />} />
         <Route path="personal-time" element={<PersonalTime />} />
+        <Route path="deductions" element={<MyDeductions />} />
         <Route path="payslip" element={<PaySlip />} />
         <Route path="admin/employees" element={<ProtectedRoute roles={['hr_admin']}><AdminEmployees /></ProtectedRoute>} />
         <Route path="admin/holidays" element={<ProtectedRoute roles={['hr_admin']}><AdminHolidays /></ProtectedRoute>} />

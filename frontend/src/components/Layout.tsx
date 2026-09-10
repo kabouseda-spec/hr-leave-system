@@ -4,7 +4,7 @@ import {
   HomeIcon, CalendarDaysIcon, ClockIcon, UsersIcon,
   ChartBarIcon, BellIcon, UserCircleIcon, ArrowRightOnRectangleIcon,
   CheckCircleIcon, DocumentPlusIcon, SunIcon, BanknotesIcon, DocumentTextIcon as PayslipIcon,
-  ArchiveBoxIcon, ClipboardDocumentListIcon,
+  ArchiveBoxIcon, ClipboardDocumentListIcon, CreditCardIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import api from '../api/client';
@@ -58,6 +58,7 @@ export default function Layout() {
           <NavItem to="/leave/request" icon={DocumentPlusIcon} label="Request Leave" />
           <NavItem to="/leave/history" icon={CalendarDaysIcon} label="My Leaves" />
           <NavItem to="/personal-time" icon={ClockIcon} label="Personal Time" />
+          <NavItem to="/deductions" icon={CreditCardIcon} label="Deductions" />
           <NavItem to="/calendar" icon={CalendarDaysIcon} label="Team Calendar" />
 
           {(user?.role === 'manager' || user?.role === 'hr_admin') && (
