@@ -289,21 +289,30 @@ router.get('/payslip', auth, (req, res) => {
 
 // Notifications
 router.get('/notifications', auth, (req, res) => {
-  // Event-type notifications (birthdays, anniversaries) expire after the day they were created.
-  // Leave-related notifications persist until dismissed/read.
-  const rows = db.prepare(`
-    SELECT * FROM notifications
-    WHERE employee_id = ?
-      AND dismissed = 0
-      AND (
-        type NOT IN ('employee_birthday','spouse_birthday','child_birthday','sibling_birthday',
-                     'parent_birthday','other_birthday','work_anniversary','marriage_anniversary')
-        OR date(created_at) = date('now')
-      )
-    ORDER BY created_at DESC
-    LIMIT 50
-  `).all(req.user.id);
-  res.json(rows);
+  // Try with dismissed filter first; fall back to basic query if column doesn't exist yet
+  try {
+    const rows = db.prepare(`
+      SELECT * FROM notifications
+      WHERE employee_id = ?
+        AND COALESCE(dismissed, 0) = 0
+        AND (
+          type NOT IN ('employee_birthday','spouse_birthday','child_birthday','sibling_birthday',
+                       'parent_birthday','other_birthday','work_anniversary','marriage_anniversary')
+          OR date(created_at) = date('now')
+        )
+      ORDER BY created_at DESC
+      LIMIT 50
+    `).all(req.user.id);
+    res.json(rows);
+  } catch {
+    // dismissed column not yet migrated — return all unread notifications
+    const rows = db.prepare(`
+      SELECT * FROM notifications
+      WHERE employee_id = ? AND read = 0
+      ORDER BY created_at DESC LIMIT 50
+    `).all(req.user.id);
+    res.json(rows);
+  }
 });
 
 router.patch('/notifications/:id/read', auth, (req, res) => {

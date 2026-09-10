@@ -248,32 +248,39 @@ export default function Dashboard() {
   const [hireDate, setHireDate] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get(`/employees/${user!.id}/balances`),
       api.get('/leaves'),
       user!.role !== 'employee' ? api.get('/leaves?status=pending') : Promise.resolve({ data: [] }),
       api.get('/reports/notifications'),
       api.get(`/admin/holidays?year=${dayjs().year()}`),
     ]).then(([balRes, leavesRes, pendingRes, notifRes, holRes]) => {
-      const { balances: b, rollover: r, personalTime: pt, employee: empData } = balRes.data;
-      // Show annual, sick, unpaid — personal time is shown via its own card
-      const shown = (Array.isArray(b) ? b : []).filter((bal: Balance) =>
-        ['annual', 'sick', 'unpaid'].includes(bal.leave_type)
-      );
-      setBalances(shown);
-      setPersonalTime(pt || null);
-      setRollover(r || null);
-      if (empData?.hire_date) setHireDate(empData.hire_date);
-      setRecentLeaves(leavesRes.data.slice(0, 5));
-      setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
-      // Show ALL undismissed notifications
-      setNotifications(notifRes.data.filter((n: any) => !n.dismissed));
-      // Upcoming holidays (next 60 days)
-      const today = dayjs();
-      const upcoming = (holRes.data || []).filter((h: any) =>
-        dayjs(h.date).isAfter(today) && dayjs(h.date).diff(today, 'day') <= 60
-      ).slice(0, 5);
-      setHolidays(upcoming);
+      if (balRes.status === 'fulfilled') {
+        const { balances: b, rollover: r, personalTime: pt, employee: empData } = balRes.value.data;
+        const shown = (Array.isArray(b) ? b : []).filter((bal: Balance) =>
+          ['annual', 'sick', 'unpaid'].includes(bal.leave_type)
+        );
+        setBalances(shown);
+        setPersonalTime(pt || null);
+        setRollover(r || null);
+        if (empData?.hire_date) setHireDate(empData.hire_date);
+      }
+      if (leavesRes.status === 'fulfilled') {
+        setRecentLeaves(leavesRes.value.data.slice(0, 5));
+      }
+      if (pendingRes.status === 'fulfilled') {
+        setPendingCount(Array.isArray(pendingRes.value.data) ? pendingRes.value.data.length : 0);
+      }
+      if (notifRes.status === 'fulfilled') {
+        setNotifications((notifRes.value.data || []).filter((n: any) => !n.dismissed));
+      }
+      if (holRes.status === 'fulfilled') {
+        const today = dayjs();
+        const upcoming = (holRes.value.data || []).filter((h: any) =>
+          dayjs(h.date).isAfter(today) && dayjs(h.date).diff(today, 'day') <= 60
+        ).slice(0, 5);
+        setHolidays(upcoming);
+      }
     }).finally(() => setLoading(false));
   }, [user]);
 
