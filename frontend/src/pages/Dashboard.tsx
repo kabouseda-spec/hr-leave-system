@@ -5,7 +5,7 @@ import api from '../api/client';
 import dayjs from 'dayjs';
 import {
   PlusIcon, CheckCircleIcon, DocumentTextIcon,
-  CalendarDaysIcon, ClockIcon, HeartIcon, ExclamationCircleIcon, ChevronRightIcon,
+  CalendarDaysIcon, ClockIcon, HeartIcon, ExclamationCircleIcon, ChevronRightIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
 import PolicyModal from '../components/PolicyModal';
 
@@ -18,6 +18,7 @@ interface Balance {
   used_half: number;
   used_unpaid: number;
   pending: number;
+  bonus_days: number;
 }
 
 interface PersonalTimeBalance {
@@ -110,11 +111,12 @@ function LeaveCard({ b, rollover, onClick }: { b: Balance; rollover?: Rollover; 
   const isHours  = b.unit === 'hours';
   const Icon     = LEAVE_ICON[b.leave_type] || CalendarDaysIcon;
   const totalUsed = b.used_paid + b.used_half + b.used_unpaid;
-  const remaining = b.allocated - totalUsed - b.pending;
+  const totalAllocated = b.allocated + (b.bonus_days || 0);
+  const remaining = totalAllocated - totalUsed - b.pending;
   // Sick: show accumulated days (build up from 0), not days left
   const pct = isSick
     ? Math.min(100, (totalUsed / 90) * 100)
-    : b.allocated > 0 ? Math.min(100, (totalUsed / b.allocated) * 100) : 0;
+    : totalAllocated > 0 ? Math.min(100, (totalUsed / totalAllocated) * 100) : 0;
 
   const barColor =
     isUnpaid     ? 'bg-red-500' :
@@ -195,7 +197,10 @@ function LeaveCard({ b, rollover, onClick }: { b: Balance; rollover?: Rollover; 
               </span>
               <span className="text-gray-400 text-sm mb-1">{isHours ? 'hrs left' : 'days left'}</span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">of {b.allocated} {isHours ? 'hrs' : 'days'} allocated</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              of {totalAllocated} {isHours ? 'hrs' : 'days'} allocated
+              {(b.bonus_days || 0) > 0 && <span className="text-green-600 ml-1">(+{b.bonus_days} bonus)</span>}
+            </p>
           </>
         )}
       </div>
@@ -240,6 +245,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [holidays, setHolidays] = useState<any[]>([]);
+  const [hireDate, setHireDate] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -249,18 +255,19 @@ export default function Dashboard() {
       api.get('/reports/notifications'),
       api.get(`/admin/holidays?year=${dayjs().year()}`),
     ]).then(([balRes, leavesRes, pendingRes, notifRes, holRes]) => {
-      const { balances: b, rollover: r, personalTime: pt } = balRes.data;
-      // Show annual, sick, unpaid — personal time is shown via its own card from personal_time_balances
+      const { balances: b, rollover: r, personalTime: pt, employee: empData } = balRes.data;
+      // Show annual, sick, unpaid — personal time is shown via its own card
       const shown = (Array.isArray(b) ? b : []).filter((bal: Balance) =>
         ['annual', 'sick', 'unpaid'].includes(bal.leave_type)
       );
       setBalances(shown);
       setPersonalTime(pt || null);
       setRollover(r || null);
+      if (empData?.hire_date) setHireDate(empData.hire_date);
       setRecentLeaves(leavesRes.data.slice(0, 5));
       setPendingCount(Array.isArray(pendingRes.data) ? pendingRes.data.length : 0);
-      // Show ALL unread notifications (no slice limit)
-      setNotifications(notifRes.data.filter((n: any) => !n.read));
+      // Show ALL undismissed notifications
+      setNotifications(notifRes.data.filter((n: any) => !n.dismissed));
       // Upcoming holidays (next 60 days)
       const today = dayjs();
       const upcoming = (holRes.data || []).filter((h: any) =>
@@ -306,7 +313,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Unread notifications — all shown with scroll if many */}
+        {/* Notifications — all undismissed, scrollable if many */}
         {notifications.length > 0 && (
           <div className={`space-y-2 ${notifications.length > 4 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
             {notifications.map((n: any) => {
@@ -315,31 +322,43 @@ export default function Dashboard() {
                 n.type === 'leave_approved' ? '/leave/history'   :
                 n.type === 'leave_rejected' ? '/leave/history'   :
                 n.type === 'personal_time'  ? '/personal-time'   :
+                n.type === 'comp_day'       ? '/leave/history'   :
                 n.type?.includes('visa')    ? '/admin/employees' :
                 null;
               const colorCls =
                 n.type?.includes('visa')     ? 'bg-orange-50 border-orange-200 text-orange-800' :
-                n.type?.includes('approved') ? 'bg-green-50 border-green-200 text-green-800'    :
+                n.type?.includes('approved') || n.type === 'comp_day' || n.type === 'leave_rollover'
+                                             ? 'bg-green-50 border-green-200 text-green-800'    :
                 n.type?.includes('rejected') ? 'bg-red-50 border-red-200 text-red-800'          :
                 'bg-blue-50 border-blue-200 text-blue-800';
-              const emoji =
-                n.type?.includes('visa')     ? '⚠️' :
-                n.type?.includes('approved') ? '✅' :
-                n.type?.includes('rejected') ? '❌' : '📋';
+
+              const dismiss = async (e: React.MouseEvent) => {
+                e.stopPropagation();
+                await api.patch(`/reports/notifications/${n.id}/dismiss`);
+                setNotifications(prev => prev.filter(x => x.id !== n.id));
+              };
 
               return (
-                <div key={n.id} className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${colorCls}`}>
-                  <span className="flex-shrink-0">{emoji}</span>
+                <div key={n.id} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${colorCls}`}>
                   <p className="flex-1">{n.message}</p>
-                  {dest && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {dest && (
+                      <button
+                        onClick={() => navigate(dest)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/60 hover:bg-white border border-current/20 transition-colors whitespace-nowrap flex items-center gap-1"
+                        title="Go to action"
+                      >
+                        View <ChevronRightIcon className="h-3 w-3" />
+                      </button>
+                    )}
                     <button
-                      onClick={() => navigate(dest)}
-                      className="flex-shrink-0 ml-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-white/60 hover:bg-white border border-current/20 transition-colors whitespace-nowrap flex items-center gap-1"
-                      title="Go to action"
+                      onClick={dismiss}
+                      className="p-1 rounded-lg hover:bg-white/60 transition-colors"
+                      title="Dismiss notification"
                     >
-                      View <ChevronRightIcon className="h-3 w-3" />
+                      <XMarkIcon className="h-4 w-4" />
                     </button>
-                  )}
+                  </div>
                 </div>
               );
             })}
@@ -396,6 +415,57 @@ export default function Dashboard() {
           </div>
 
         </div>
+
+        {/* Leave Accrual Status */}
+        {(() => {
+          const hd = hireDate;
+          if (!hd) return null;
+          const hire = dayjs(hd);
+          const probEnd = hire.add(6, 'month');
+          const today = dayjs();
+          const monthsWorked = today.diff(hire, 'month');
+          const isProbation = today.isBefore(probEnd);
+          const accrualRate = 1.833; // 22 days / 12 months
+          const accrualMonths = Math.max(0, today.diff(probEnd, 'month'));
+          const accrued = Math.min(22, Math.round(accrualMonths * accrualRate * 10) / 10);
+          const annualBal = balances.find(b => b.leave_type === 'annual');
+          const used = annualBal ? (annualBal.used_paid + annualBal.used_half + annualBal.used_unpaid) : 0;
+          return (
+            <div className="bg-gradient-to-r from-brand-50 to-blue-50 border border-brand-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-brand-800 mb-1">📈 Leave Accrual</h2>
+                  {isProbation ? (
+                    <p className="text-sm text-brand-700">
+                      You are in your probation period — leave accrual starts on <strong>{probEnd.format('D MMM YYYY')}</strong>.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-brand-700">
+                      Accruing <strong>1.83 days/month</strong> after probation · <strong>{accrualMonths}</strong> month{accrualMonths !== 1 ? 's' : ''} accrued · <strong>{accrued} days</strong> earned
+                    </p>
+                  )}
+                  <p className="text-xs text-brand-500 mt-1">
+                    {isProbation
+                      ? `Probation ends in ${probEnd.diff(today, 'day')} days`
+                      : `${Math.max(0, accrued - used).toFixed(1)} days available · ${used.toFixed(1)} used`}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-2xl font-bold text-brand-700">{isProbation ? '—' : accrued}</p>
+                  <p className="text-xs text-brand-500">days accrued</p>
+                </div>
+              </div>
+              {!isProbation && (
+                <div className="mt-3 w-full bg-brand-100 rounded-full h-1.5">
+                  <div
+                    className="h-1.5 rounded-full bg-brand-500 transition-all"
+                    style={{ width: `${Math.min(100, (accrued / 22) * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Upcoming holidays */}
         {holidays.length > 0 && (

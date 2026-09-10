@@ -134,6 +134,8 @@ function checkEligibility(employee, leaveType, requestDate, subType) {
     }
   } else if (leaveType === 'study') {
     if (monthsWorked < 24) return { eligible: false, reason: 'Study leave requires 2 years of service.' };
+  } else if (leaveType === 'business_trip' || leaveType === 'comp') {
+    // No restrictions — admin/manager grants these
   } else if (leaveType === 'compassionate') {
     if (!subType || !COMPASSIONATE_DAYS[subType.toLowerCase()]) {
       return { eligible: false, reason: 'Please select the relationship type for compassionate leave (spouse / child / parent / sibling / grandparent).' };
@@ -398,7 +400,7 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
     }
 
   } else {
-    // parental, study — always fully paid within allocation
+    // parental, study, business_trip, comp — always fully paid
     paid = totalDays;
   }
 

@@ -153,6 +153,17 @@ router.post('/', auth, (req, res) => {
     }
   }
 
+  // Business trip: notify HR admins so they can grant a comp day if applicable
+  if (leave_type === 'business_trip') {
+    const hrAdmins = db.prepare("SELECT id FROM employees WHERE role='hr_admin' AND is_active=1").all();
+    hrAdmins.forEach(hr => {
+      db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
+        .run(uuidv4(), hr.id,
+          `✈️ Business trip logged: ${employee.full_name} worked ${result.totalDays} day(s) on a day off (${start_date}${end !== start_date ? '–'+end : ''}). Consider granting a compensatory day.`,
+          'leave_request');
+    });
+  }
+
   // Personal time: also update period balance
   if (leave_type === 'personal') {
     const period = engine.getPersonalTimePeriod(start_date);

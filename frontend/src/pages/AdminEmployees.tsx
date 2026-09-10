@@ -33,6 +33,7 @@ interface FamilyMember {
   relationship: string;
   name: string;
   date_of_birth: string | null;
+  in_uae: number;
 }
 
 const DEPARTMENTS = [
@@ -77,9 +78,15 @@ export default function AdminEmployees() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [form, setForm] = useState({ ...BLANK_FORM });
-  const [activeTab, setActiveTab] = useState<'info' | 'personal' | 'visa' | 'leaves'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'personal' | 'visa' | 'leaves' | 'adjustments'>('info');
+  const [rolloverForm, setRolloverForm] = useState({ leave_type: 'annual', from_year: String(new Date().getFullYear() - 1), to_year: String(new Date().getFullYear()), days: '' });
+  const [rolloverMsg, setRolloverMsg] = useState<string | null>(null);
+  const [compForm, setCompForm] = useState({ granted_date: new Date().toISOString().slice(0, 10), reason: '' });
+  const [compMsg, setCompMsg] = useState<string | null>(null);
+  const [balCorrectForm, setBalCorrectForm] = useState({ leave_type: 'annual', year: String(new Date().getFullYear()), allocated: '', used_paid: '', used_unpaid: '' });
+  const [balCorrectMsg, setBalCorrectMsg] = useState<string | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [newMember, setNewMember] = useState({ relationship: 'child', name: '', date_of_birth: '' });
+  const [newMember, setNewMember] = useState({ relationship: 'child', name: '', date_of_birth: '', in_uae: true });
   const [addingMember, setAddingMember] = useState(false);
 
   // Leave Records tab state
@@ -256,7 +263,7 @@ export default function AdminEmployees() {
     try {
       const res = await api.post(`/employees/${editing.id}/family`, newMember);
       setFamilyMembers(prev => [...prev, { ...res.data, ...newMember }]);
-      setNewMember({ relationship: 'child', name: '', date_of_birth: '' });
+      setNewMember({ relationship: 'child', name: '', date_of_birth: '', in_uae: true });
     } finally { setAddingMember(false); }
   };
 
@@ -446,6 +453,7 @@ export default function AdminEmployees() {
                 { key: 'personal', label: 'Family & Birthdays' },
                 { key: 'visa',     label: 'Visa & Passport' },
                 ...(editing ? [{ key: 'leaves', label: '📋 Leave Records' }] : []),
+                ...(editing ? [{ key: 'adjustments', label: '⚙️ Adjustments' }] : []),
               ] as const).map((t: any) => (
                 <button key={t.key} type="button" onClick={() => {
                   setActiveTab(t.key);
@@ -617,6 +625,9 @@ export default function AdminEmployees() {
                                 {m.date_of_birth && (
                                   <span className="text-xs text-gray-400 ml-2">🎂 {dayjs(m.date_of_birth).format('D MMM YYYY')}</span>
                                 )}
+                                <span className={`text-xs ml-2 ${m.in_uae ? 'text-green-600' : 'text-gray-400'}`}>
+                                  {m.in_uae ? '🇦🇪 In UAE' : '✈️ Not in UAE'}
+                                </span>
                               </div>
                               <button onClick={() => removeFamilyMember(m.id)}
                                 className="text-gray-300 hover:text-red-500 transition-colors">
@@ -652,6 +663,12 @@ export default function AdminEmployees() {
                                 onChange={e => setNewMember(m => ({ ...m, date_of_birth: e.target.value }))} />
                             </div>
                           </div>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" className="rounded"
+                              checked={newMember.in_uae}
+                              onChange={e => setNewMember(m => ({ ...m, in_uae: e.target.checked }))} />
+                            <span className="text-xs text-gray-700">Currently in UAE (birthday reminders will be sent)</span>
+                          </label>
                           <button type="button" className="btn-primary text-xs py-1.5" disabled={!newMember.name || addingMember}
                             onClick={addFamilyMember}>
                             <PlusIcon className="h-3.5 w-3.5" />
@@ -1039,12 +1056,143 @@ export default function AdminEmployees() {
                     </div>
                   </div>
                 )}
+              {/* ── Adjustments tab ──────────────────────────────────────────── */}
+              {activeTab === 'adjustments' && editing && (
+                <div className="space-y-6">
+                  {/* Leave Balance Rollover */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 text-sm mb-3">📅 Roll Over Leave Days</h3>
+                    <p className="text-xs text-gray-500 mb-3">Carry unused leave from one year to the next. Adds to bonus_days on the target year balance.</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="label text-xs">Leave Type</label>
+                        <select className="input text-sm" value={rolloverForm.leave_type}
+                          onChange={e => setRolloverForm(f => ({ ...f, leave_type: e.target.value }))}>
+                          <option value="annual">Annual</option>
+                          <option value="sick">Sick</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label text-xs">Days to Roll Over</label>
+                        <input type="number" className="input text-sm" min="0" step="0.5"
+                          value={rolloverForm.days}
+                          onChange={e => setRolloverForm(f => ({ ...f, days: e.target.value }))}
+                          placeholder="e.g. 3" />
+                      </div>
+                      <div>
+                        <label className="label text-xs">From Year</label>
+                        <input type="number" className="input text-sm" value={rolloverForm.from_year}
+                          onChange={e => setRolloverForm(f => ({ ...f, from_year: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label text-xs">To Year</label>
+                        <input type="number" className="input text-sm" value={rolloverForm.to_year}
+                          onChange={e => setRolloverForm(f => ({ ...f, to_year: e.target.value }))} />
+                      </div>
+                    </div>
+                    <button type="button" className="btn-primary text-xs py-1.5"
+                      disabled={!rolloverForm.days}
+                      onClick={async () => {
+                        try {
+                          await api.post(`/employees/${editing.id}/balances/rollover`, rolloverForm);
+                          setRolloverMsg(`✅ ${rolloverForm.days} days rolled over from ${rolloverForm.from_year} to ${rolloverForm.to_year}`);
+                        } catch { setRolloverMsg('❌ Failed to roll over days'); }
+                      }}>
+                      Roll Over Days
+                    </button>
+                    {rolloverMsg && <p className="text-xs mt-2 text-green-700">{rolloverMsg}</p>}
+                  </div>
+
+                  {/* Balance Correction */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 text-sm mb-3">✏️ Correct Leave Balance</h3>
+                    <p className="text-xs text-gray-500 mb-3">Manually set allocated days or adjust used days to fix incorrect balances.</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="label text-xs">Leave Type</label>
+                        <select className="input text-sm" value={balCorrectForm.leave_type}
+                          onChange={e => setBalCorrectForm(f => ({ ...f, leave_type: e.target.value }))}>
+                          <option value="annual">Annual</option>
+                          <option value="sick">Sick</option>
+                          <option value="unpaid">Unpaid</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label text-xs">Year</label>
+                        <input type="number" className="input text-sm" value={balCorrectForm.year}
+                          onChange={e => setBalCorrectForm(f => ({ ...f, year: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Allocated Days (leave blank to keep)</label>
+                        <input type="number" className="input text-sm" step="0.5" value={balCorrectForm.allocated}
+                          onChange={e => setBalCorrectForm(f => ({ ...f, allocated: e.target.value }))}
+                          placeholder="e.g. 20" />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Used (Paid) Days</label>
+                        <input type="number" className="input text-sm" step="0.5" value={balCorrectForm.used_paid}
+                          onChange={e => setBalCorrectForm(f => ({ ...f, used_paid: e.target.value }))}
+                          placeholder="e.g. 12" />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Used (Unpaid) Days</label>
+                        <input type="number" className="input text-sm" step="0.5" value={balCorrectForm.used_unpaid}
+                          onChange={e => setBalCorrectForm(f => ({ ...f, used_unpaid: e.target.value }))}
+                          placeholder="e.g. 6" />
+                      </div>
+                    </div>
+                    <button type="button" className="btn-primary text-xs py-1.5"
+                      onClick={async () => {
+                        try {
+                          const body: any = { leave_type: balCorrectForm.leave_type, year: Number(balCorrectForm.year) };
+                          if (balCorrectForm.allocated !== '') body.allocated = Number(balCorrectForm.allocated);
+                          if (balCorrectForm.used_paid !== '') body.used_paid = Number(balCorrectForm.used_paid);
+                          if (balCorrectForm.used_unpaid !== '') body.used_unpaid = Number(balCorrectForm.used_unpaid);
+                          await api.patch(`/employees/${editing.id}/balances/correct`, body);
+                          setBalCorrectMsg('✅ Balance corrected successfully');
+                        } catch { setBalCorrectMsg('❌ Failed to correct balance'); }
+                      }}>
+                      Apply Correction
+                    </button>
+                    {balCorrectMsg && <p className="text-xs mt-2 text-green-700">{balCorrectMsg}</p>}
+                  </div>
+
+                  {/* Grant Comp Day */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 text-sm mb-3">🎁 Grant Compensatory Day Off</h3>
+                    <p className="text-xs text-gray-500 mb-3">Award a comp day when an employee worked on their day off.</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="label text-xs">Date of Comp Day</label>
+                        <input type="date" className="input text-sm" value={compForm.granted_date}
+                          onChange={e => setCompForm(f => ({ ...f, granted_date: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Reason</label>
+                        <input type="text" className="input text-sm" value={compForm.reason}
+                          onChange={e => setCompForm(f => ({ ...f, reason: e.target.value }))}
+                          placeholder="e.g. Worked on Eid holiday" />
+                      </div>
+                    </div>
+                    <button type="button" className="btn-primary text-xs py-1.5"
+                      onClick={async () => {
+                        try {
+                          await api.post('/comp-days', { employee_id: editing.id, ...compForm });
+                          setCompMsg('✅ Compensatory day granted');
+                        } catch { setCompMsg('❌ Failed to grant comp day'); }
+                      }}>
+                      Grant Comp Day
+                    </button>
+                    {compMsg && <p className="text-xs mt-2 text-green-700">{compMsg}</p>}
+                  </div>
+                </div>
+              )}
               </div>
 
               {error && <p className="px-5 text-red-600 text-sm flex-shrink-0">{error}</p>}
 
               <div className="flex gap-3 p-5 border-t border-gray-100 flex-shrink-0">
-                {activeTab !== 'leaves' && (
+                {activeTab !== 'leaves' && activeTab !== 'adjustments' && (
                   <>
                     {editing && user?.role === 'hr_admin' && (
                       <button type="button" onClick={deleteEmployee}
@@ -1058,7 +1206,7 @@ export default function AdminEmployees() {
                     </button>
                   </>
                 )}
-                {activeTab === 'leaves' && (
+                {(activeTab === 'leaves' || activeTab === 'adjustments') && (
                   <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => setShowForm(false)}>Close</button>
                 )}
               </div>

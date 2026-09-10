@@ -105,8 +105,8 @@ function runReminders() {
       }
     }
 
-    // ── Spouse Birthday ─────────────────────────────────────────────────────
-    if (emp.spouse_dob) {
+    // ── Spouse Birthday (UAE only) ──────────────────────────────────────────
+    if (emp.spouse_dob && emp.spouse_in_uae) {
       const diff = daysUntil(emp.spouse_dob, today);
       if (diff !== null && NOTIFY_DAYS_BEFORE.includes(diff)) {
         const spouseName = emp.spouse_name ? emp.spouse_name : `${emp.full_name}'s spouse`;
@@ -117,10 +117,12 @@ function runReminders() {
       }
     }
 
-    // ── Family Members (children, siblings) ─────────────────────────────────
+    // ── Family Members — only those in UAE ──────────────────────────────────
     const family = db.prepare('SELECT * FROM family_members WHERE employee_id = ?').all(emp.id);
     for (const member of family) {
+      // Skip family members not in UAE (in_uae=0) or with no birthday
       if (!member.date_of_birth) continue;
+      if (member.in_uae === 0) continue;
       const diff = daysUntil(member.date_of_birth, today);
       if (diff === null || !NOTIFY_DAYS_BEFORE.includes(diff)) continue;
 

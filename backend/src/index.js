@@ -19,6 +19,7 @@ app.use('/api/leaves',                require('./routes/leaves'));
 app.use('/api/personal-time',         require('./routes/personalTime'));
 app.use('/api/reports',               require('./routes/reports'));
 app.use('/api/admin',                 require('./routes/admin'));
+app.use('/api/comp-days',             require('./routes/compDays'));
 
 app.get('/api/health', (_, res) => {
   try {

@@ -290,10 +290,11 @@ router.get('/payslip', auth, (req, res) => {
 // Notifications
 router.get('/notifications', auth, (req, res) => {
   // Event-type notifications (birthdays, anniversaries) expire after the day they were created.
-  // Leave-related notifications persist until read.
+  // Leave-related notifications persist until dismissed/read.
   const rows = db.prepare(`
     SELECT * FROM notifications
     WHERE employee_id = ?
+      AND dismissed = 0
       AND (
         type NOT IN ('employee_birthday','spouse_birthday','child_birthday','sibling_birthday',
                      'parent_birthday','other_birthday','work_anniversary','marriage_anniversary')
@@ -308,6 +309,11 @@ router.get('/notifications', auth, (req, res) => {
 router.patch('/notifications/:id/read', auth, (req, res) => {
   db.prepare('UPDATE notifications SET read=1 WHERE id=? AND employee_id=?').run(req.params.id, req.user.id);
   res.json({ message: 'Marked as read' });
+});
+
+router.patch('/notifications/:id/dismiss', auth, (req, res) => {
+  db.prepare('UPDATE notifications SET dismissed=1, read=1 WHERE id=? AND employee_id=?').run(req.params.id, req.user.id);
+  res.json({ message: 'Dismissed' });
 });
 
 router.patch('/notifications/read-all', auth, (req, res) => {

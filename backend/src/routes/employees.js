@@ -196,7 +196,7 @@ router.get('/:id/balances', auth, (req, res) => {
   const personalTime = db.prepare('SELECT * FROM personal_time_balances WHERE employee_id=? AND period=?')
     .get(req.params.id, ptPeriod) || null;
 
-  res.json({ balances, rollover, personalTime });
+  res.json({ balances, rollover, personalTime, employee: { hire_date: employee.hire_date, probation_end_date: employee.probation_end_date } });
 });
 
 // HR Admin balance override
@@ -266,6 +266,74 @@ router.delete('/:id', auth, rbac('hr_admin'), (req, res) => {
     .run(uuidv4(), req.user.id, 'delete_employee', 'employee', emp.id, JSON.stringify({ email: emp.email, name: emp.full_name }));
 
   res.json({ message: `${emp.full_name} has been permanently deleted.` });
+});
+
+// ── Leave balance correction (HR admin) ──────────────────────────────────────
+// Allows HR to set the allocated days and adjust used/pending for any employee+leave type+year
+router.patch('/:id/balances/correct', auth, rbac('hr_admin'), (req, res) => {
+  const { leave_type, year, allocated, used_paid, used_half, used_unpaid, pending, bonus_days } = req.body;
+  if (!leave_type || !year) return res.status(400).json({ error: 'leave_type and year required' });
+
+  const emp = db.prepare('SELECT id FROM employees WHERE id=?').get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  const existing = db.prepare('SELECT id FROM leave_balances WHERE employee_id=? AND leave_type=? AND year=?')
+    .get(req.params.id, leave_type, year);
+
+  if (existing) {
+    const fields = [];
+    const vals = [];
+    if (allocated   !== undefined) { fields.push('allocated=?');    vals.push(allocated); }
+    if (used_paid   !== undefined) { fields.push('used_paid=?');    vals.push(used_paid); }
+    if (used_half   !== undefined) { fields.push('used_half=?');    vals.push(used_half); }
+    if (used_unpaid !== undefined) { fields.push('used_unpaid=?');  vals.push(used_unpaid); }
+    if (pending     !== undefined) { fields.push('pending=?');      vals.push(pending); }
+    if (bonus_days  !== undefined) { fields.push('bonus_days=?');   vals.push(bonus_days); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    fields.push("updated_at=datetime('now')");
+    db.prepare(`UPDATE leave_balances SET ${fields.join(',')} WHERE employee_id=? AND leave_type=? AND year=?`)
+      .run(...vals, req.params.id, leave_type, year);
+  } else {
+    const rollover = engine.getRolloverPeriod(emp.hire_date || new Date().toISOString(), `${year}-06-01`);
+    db.prepare('INSERT INTO leave_balances (id,employee_id,leave_type,year,allocated,used_paid,used_half,used_unpaid,pending,bonus_days) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(uuidv4(), req.params.id, leave_type, year,
+        allocated || 0, used_paid || 0, used_half || 0, used_unpaid || 0, pending || 0, bonus_days || 0);
+  }
+  res.json({ message: 'Balance corrected' });
+});
+
+// ── Leave balance rollover (HR admin manually carries over days) ──────────────
+router.post('/:id/balances/rollover', auth, rbac('hr_admin'), (req, res) => {
+  const { leave_type, from_year, to_year, days } = req.body;
+  if (!leave_type || !from_year || !to_year || days === undefined)
+    return res.status(400).json({ error: 'leave_type, from_year, to_year, days required' });
+
+  const emp = db.prepare('SELECT * FROM employees WHERE id=?').get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  // Ensure the target year balance exists
+  const existing = db.prepare('SELECT * FROM leave_balances WHERE employee_id=? AND leave_type=? AND year=?')
+    .get(req.params.id, leave_type, to_year);
+
+  const rollover = engine.getRolloverPeriod(emp.hire_date, `${to_year}-06-01`);
+  const { v4: uuidv4 } = require('uuid');
+
+  if (!existing) {
+    const policy = db.prepare('SELECT * FROM leave_policies WHERE leave_type=?').get(leave_type);
+    const baseAlloc = leave_type === 'annual' ? engine.calculateAnnualLeaveAllowance(emp, `${to_year}-06-01`) : (policy ? policy.annual_allowance : 0);
+    db.prepare('INSERT INTO leave_balances (id,employee_id,leave_type,year,period_start,period_end,allocated,bonus_days) VALUES (?,?,?,?,?,?,?,?)')
+      .run(uuidv4(), req.params.id, leave_type, to_year, rollover.periodStart, rollover.periodEnd, baseAlloc, parseFloat(days));
+  } else {
+    db.prepare('UPDATE leave_balances SET bonus_days=bonus_days+?, updated_at=datetime(\'now\') WHERE employee_id=? AND leave_type=? AND year=?')
+      .run(parseFloat(days), req.params.id, leave_type, to_year);
+  }
+
+  db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
+    .run(uuidv4(), req.params.id,
+      `📅 ${parseFloat(days)} day(s) of ${leave_type} leave have been rolled over from ${from_year} to ${to_year}.`,
+      'leave_rollover');
+
+  res.json({ message: `${days} days rolled over from ${from_year} to ${to_year}` });
 });
 
 // Department list

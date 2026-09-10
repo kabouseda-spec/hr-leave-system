@@ -51,6 +51,20 @@ const migrations = [
   "ALTER TABLE leave_balances ADD COLUMN period_end TEXT",
   // public_holidays
   "ALTER TABLE public_holidays ADD COLUMN end_date TEXT",
+  // notifications dismiss
+  "ALTER TABLE notifications ADD COLUMN dismissed INTEGER DEFAULT 0",
+  // family member UAE flag
+  "ALTER TABLE family_members ADD COLUMN in_uae INTEGER DEFAULT 1",
+  // compensatory days granted by admin
+  `CREATE TABLE IF NOT EXISTS comp_days (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    granted_date TEXT NOT NULL,
+    reason TEXT,
+    granted_by TEXT REFERENCES employees(id),
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
   // family_members table
   `CREATE TABLE IF NOT EXISTS family_members (
     id TEXT PRIMARY KEY,
@@ -64,6 +78,34 @@ const migrations = [
 
 for (const sql of migrations) {
   try { db.exec(sql); } catch(e) { /* column already exists — skip */ }
+}
+
+// ── Seed new leave policy types (idempotent) ──────────────────────────────────
+const { v4: _uuidv4 } = require('uuid');
+const newPolicies = [
+  { leave_type: 'business_trip', label: 'Business Trip', unit: 'days',
+    eligibility_months: 0, annual_allowance: 0, full_pay_days: 999,
+    half_pay_days: 0, unpaid_days: 0, allow_negative: 0,
+    requires_certificate: 0, certificate_after_days: 0, rollover_days: 0,
+    blackout_start: null, blackout_end: null, is_active: 1 },
+  { leave_type: 'comp', label: 'Compensatory Off', unit: 'days',
+    eligibility_months: 0, annual_allowance: 0, full_pay_days: 999,
+    half_pay_days: 0, unpaid_days: 0, allow_negative: 0,
+    requires_certificate: 0, certificate_after_days: 0, rollover_days: 0,
+    blackout_start: null, blackout_end: null, is_active: 1 },
+];
+const _insertPolicy = db.prepare(`INSERT OR IGNORE INTO leave_policies
+  (id,leave_type,label,unit,eligibility_months,annual_allowance,full_pay_days,half_pay_days,
+   unpaid_days,allow_negative,requires_certificate,certificate_after_days,rollover_days,
+   blackout_start,blackout_end,is_active)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+for (const p of newPolicies) {
+  try {
+    _insertPolicy.run(_uuidv4(), p.leave_type, p.label, p.unit, p.eligibility_months,
+      p.annual_allowance, p.full_pay_days, p.half_pay_days, p.unpaid_days,
+      p.allow_negative, p.requires_certificate, p.certificate_after_days,
+      p.rollover_days, p.blackout_start, p.blackout_end, p.is_active);
+  } catch(e) { /* already exists */ }
 }
 
 
