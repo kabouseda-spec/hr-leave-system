@@ -177,7 +177,7 @@ router.get('/:id/balances', auth, (req, res) => {
   if (req.user.role === 'employee' && req.user.id !== req.params.id) {
     return res.status(403).json({ error: 'Access denied' });
   }
-  const emp = db.prepare('SELECT hire_date FROM employees WHERE id=?').get(req.params.id);
+  const emp = db.prepare('SELECT hire_date, probation_end_date FROM employees WHERE id=?').get(req.params.id);
   if (!emp) return res.status(404).json({ error: 'Not found' });
 
   // Use rollover period for annual leave, calendar year for others
@@ -196,7 +196,7 @@ router.get('/:id/balances', auth, (req, res) => {
   const personalTime = db.prepare('SELECT * FROM personal_time_balances WHERE employee_id=? AND period=?')
     .get(req.params.id, ptPeriod) || null;
 
-  res.json({ balances, rollover, personalTime, employee: { hire_date: employee.hire_date, probation_end_date: employee.probation_end_date } });
+  res.json({ balances, rollover, personalTime, employee: { hire_date: emp.hire_date, probation_end_date: emp.probation_end_date } });
 });
 
 // HR Admin balance override
