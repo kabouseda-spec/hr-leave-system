@@ -22,7 +22,7 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-brand-500 border-t-transparent rounded-full" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  if (roles && !roles.includes(user.role) && !user.is_owner) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 

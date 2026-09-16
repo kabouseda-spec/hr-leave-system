@@ -16,8 +16,9 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  const isOwner = !!employee.is_owner;
   const token = jwt.sign(
-    { id: employee.id, role: employee.role, department: employee.department, name: employee.full_name },
+    { id: employee.id, role: employee.role, department: employee.department, name: employee.full_name, is_owner: isOwner },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );
@@ -29,6 +30,7 @@ router.post('/login', (req, res) => {
       name: employee.full_name,
       email: employee.email,
       role: employee.role,
+      is_owner: isOwner,
       department: employee.department,
       employeeNumber: employee.employee_number,
     }

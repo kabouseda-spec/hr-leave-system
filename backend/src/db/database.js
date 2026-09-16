@@ -51,6 +51,8 @@ const migrations = [
   "ALTER TABLE leave_balances ADD COLUMN period_end TEXT",
   // public_holidays
   "ALTER TABLE public_holidays ADD COLUMN end_date TEXT",
+  // owner flag — bypasses all RBAC
+  "ALTER TABLE employees ADD COLUMN is_owner INTEGER DEFAULT 0",
   // notifications dismiss
   "ALTER TABLE notifications ADD COLUMN dismissed INTEGER DEFAULT 0",
   // event_date: actual date of the birthday/anniversary this notification is for

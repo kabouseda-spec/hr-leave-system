@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   role: 'employee' | 'manager' | 'hr_admin';
+  is_owner: boolean;
   department: string;
   employeeNumber: string;
 }

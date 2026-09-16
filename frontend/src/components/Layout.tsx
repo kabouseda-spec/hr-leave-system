@@ -61,7 +61,7 @@ export default function Layout() {
           <NavItem to="/deductions" icon={CreditCardIcon} label="Deductions" />
           <NavItem to="/calendar" icon={CalendarDaysIcon} label="Team Calendar" />
 
-          {(user?.role === 'manager' || user?.role === 'hr_admin') && (
+          {(user?.role === 'manager' || user?.role === 'hr_admin' || user?.is_owner) && (
             <>
               <div className="pt-3 pb-1">
                 <p className="text-blue-300 text-xs font-semibold uppercase tracking-wider px-3">Management</p>
@@ -69,13 +69,13 @@ export default function Layout() {
               <NavItem to="/leave/approvals" icon={CheckCircleIcon} label="Approvals" />
               <NavItem to="/leave/employee-leaves" icon={ClipboardDocumentListIcon} label="Employee Leaves" />
               <NavItem to="/admin/reports" icon={ChartBarIcon} label="Reports" />
-              {user?.role === 'hr_admin' && (
+              {(user?.role === 'hr_admin' || user?.is_owner) && (
                 <NavItem to="/admin/deductions" icon={BanknotesIcon} label="Deductions" />
               )}
             </>
           )}
 
-          {user?.role === 'hr_admin' && (
+          {(user?.role === 'hr_admin' || user?.is_owner) && (
             <>
               <div className="pt-3 pb-1">
                 <p className="text-blue-300 text-xs font-semibold uppercase tracking-wider px-3">Admin</p>
