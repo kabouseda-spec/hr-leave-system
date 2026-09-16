@@ -11,7 +11,7 @@ const dayjs = require('dayjs');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db/database');
 
-const NOTIFY_DAYS_BEFORE = [7, 1, 0]; // 7 days before, 1 day before, on the day
+const NOTIFY_DAYS_BEFORE = [7, 0]; // 7 days advance warning + same-day reminder
 
 function isSameMonthDay(dateStr, today) {
   if (!dateStr) return null;
@@ -37,17 +37,17 @@ function getRecipients(employee) {
   return [...recipients];
 }
 
-function notify(recipientId, message, type) {
-  // Avoid duplicate notifications on same day
+function notify(recipientId, message, type, eventDate = null) {
+  // Avoid duplicate notifications on same day for the same event
   const existing = db.prepare(`
     SELECT id FROM notifications
-    WHERE employee_id = ? AND type = ? AND message = ?
-    AND date(created_at) = date('now')
-  `).get(recipientId, type, message);
+    WHERE employee_id = ? AND type = ? AND date(created_at) = date('now')
+      AND (event_date = ? OR (event_date IS NULL AND message = ?))
+  `).get(recipientId, type, eventDate, message);
   if (existing) return;
 
-  db.prepare('INSERT INTO notifications (id, employee_id, message, type) VALUES (?, ?, ?, ?)')
-    .run(uuidv4(), recipientId, message, type);
+  db.prepare('INSERT INTO notifications (id, employee_id, message, type, event_date) VALUES (?, ?, ?, ?, ?)')
+    .run(uuidv4(), recipientId, message, type, eventDate);
 }
 
 function runReminders() {
@@ -73,11 +73,12 @@ function runReminders() {
       const diff = daysUntil(emp.hire_date, today);
 
       if (diff !== null && NOTIFY_DAYS_BEFORE.includes(diff)) {
-        const years = yearsToday - (diff === 0 ? 0 : 0);
+        const eventDate = today.add(diff, 'day').format('YYYY-MM-DD');
+        const years = yearsToday - (diff > 0 ? 1 : 0);
         const msg = diff === 0
           ? `🎉 Today is ${emp.full_name}'s ${years}-year work anniversary!`
-          : `📅 ${emp.full_name}'s ${years}-year work anniversary is in ${diff} day${diff > 1 ? 's' : ''} (${anniversary.format('D MMM')}).`;
-        for (const r of recipients) { notify(r, msg, 'work_anniversary'); sent++; }
+          : `📅 ${emp.full_name}'s ${years + 1}-year work anniversary is in ${diff} day${diff > 1 ? 's' : ''} (${anniversary.format('D MMM')}).`;
+        for (const r of recipients) { notify(r, msg, 'work_anniversary', eventDate); sent++; }
       }
     }
 
@@ -85,11 +86,12 @@ function runReminders() {
     if (emp.date_of_birth) {
       const diff = daysUntil(emp.date_of_birth, today);
       if (diff !== null && NOTIFY_DAYS_BEFORE.includes(diff)) {
-        const age = today.year() - dayjs(emp.date_of_birth).year() - (diff > 0 ? 0 : 0);
+        const eventDate = today.add(diff, 'day').format('YYYY-MM-DD');
+        const age = today.year() - dayjs(emp.date_of_birth).year() - (diff > 0 ? 1 : 0);
         const msg = diff === 0
           ? `🎂 Today is ${emp.full_name}'s birthday! (Turning ${age})`
           : `🎂 ${emp.full_name}'s birthday is in ${diff} day${diff > 1 ? 's' : ''} (${dayjs(emp.date_of_birth).format('D MMM')}).`;
-        for (const r of recipients) { notify(r, msg, 'employee_birthday'); sent++; }
+        for (const r of recipients) { notify(r, msg, 'employee_birthday', eventDate); sent++; }
       }
     }
 
@@ -97,11 +99,12 @@ function runReminders() {
     if (emp.marriage_anniversary) {
       const diff = daysUntil(emp.marriage_anniversary, today);
       if (diff !== null && NOTIFY_DAYS_BEFORE.includes(diff)) {
+        const eventDate = today.add(diff, 'day').format('YYYY-MM-DD');
         const years = today.year() - dayjs(emp.marriage_anniversary).year() - (diff > 0 ? 1 : 0);
         const msg = diff === 0
           ? `💑 Today is ${emp.full_name}'s ${years > 0 ? years + '-year ' : ''}wedding anniversary!`
           : `💑 ${emp.full_name}'s wedding anniversary is in ${diff} day${diff > 1 ? 's' : ''} (${dayjs(emp.marriage_anniversary).format('D MMM')}).`;
-        for (const r of recipients) { notify(r, msg, 'marriage_anniversary'); sent++; }
+        for (const r of recipients) { notify(r, msg, 'marriage_anniversary', eventDate); sent++; }
       }
     }
 
@@ -109,29 +112,30 @@ function runReminders() {
     if (emp.spouse_dob && emp.spouse_in_uae) {
       const diff = daysUntil(emp.spouse_dob, today);
       if (diff !== null && NOTIFY_DAYS_BEFORE.includes(diff)) {
+        const eventDate = today.add(diff, 'day').format('YYYY-MM-DD');
         const spouseName = emp.spouse_name ? emp.spouse_name : `${emp.full_name}'s spouse`;
         const msg = diff === 0
           ? `💍 Today is ${spouseName}'s birthday — ${emp.full_name}'s spouse!`
           : `💍 ${spouseName}'s birthday (${emp.full_name}'s spouse) is in ${diff} day${diff > 1 ? 's' : ''} (${dayjs(emp.spouse_dob).format('D MMM')}).`;
-        for (const r of recipients) { notify(r, msg, 'spouse_birthday'); sent++; }
+        for (const r of recipients) { notify(r, msg, 'spouse_birthday', eventDate); sent++; }
       }
     }
 
     // ── Family Members — only those in UAE ──────────────────────────────────
     const family = db.prepare('SELECT * FROM family_members WHERE employee_id = ?').all(emp.id);
     for (const member of family) {
-      // Skip family members not in UAE (in_uae=0) or with no birthday
       if (!member.date_of_birth) continue;
       if (member.in_uae === 0) continue;
       const diff = daysUntil(member.date_of_birth, today);
       if (diff === null || !NOTIFY_DAYS_BEFORE.includes(diff)) continue;
 
+      const eventDate = today.add(diff, 'day').format('YYYY-MM-DD');
       const emoji  = member.relationship === 'child' ? '👶' : member.relationship === 'sibling' ? '👨‍👧' : '❤️';
       const relLabel = member.relationship.charAt(0).toUpperCase() + member.relationship.slice(1);
       const msg = diff === 0
         ? `${emoji} Today is ${member.name}'s birthday — ${emp.full_name}'s ${member.relationship}!`
         : `${emoji} ${member.name}'s birthday (${emp.full_name}'s ${relLabel}) is in ${diff} day${diff > 1 ? 's' : ''} (${dayjs(member.date_of_birth).format('D MMM')}).`;
-      for (const r of recipients) { notify(r, msg, `${member.relationship}_birthday`); sent++; }
+      for (const r of recipients) { notify(r, msg, `${member.relationship}_birthday`, eventDate); sent++; }
     }
   }
 

@@ -289,7 +289,9 @@ router.get('/payslip', auth, (req, res) => {
 
 // Notifications
 // Rules:
-//   - Event types (birthday / anniversary): only show on the exact day they fire; gone the next day
+//   - Event types (birthday / anniversary):
+//       new records: show from creation until event_date has passed (>= today)
+//       legacy records without event_date: show only on creation day
 //   - Action types (leave approved, comp granted, etc.): show until dismissed, max 30 days old
 const EVENT_TYPES = `'employee_birthday','spouse_birthday','child_birthday','sibling_birthday',
                      'parent_birthday','other_birthday','work_anniversary','marriage_anniversary'`;
@@ -301,7 +303,13 @@ router.get('/notifications', auth, (req, res) => {
       WHERE employee_id = ?
         AND COALESCE(dismissed, 0) = 0
         AND (
-          (type IN (${EVENT_TYPES}) AND date(created_at) = date('now'))
+          (
+            type IN (${EVENT_TYPES})
+            AND (
+              (event_date IS NOT NULL AND event_date >= date('now'))
+              OR (event_date IS NULL AND date(created_at) = date('now'))
+            )
+          )
           OR
           (type NOT IN (${EVENT_TYPES}) AND created_at >= datetime('now', '-30 days'))
         )
@@ -315,7 +323,13 @@ router.get('/notifications', auth, (req, res) => {
       WHERE employee_id = ?
         AND read = 0
         AND (
-          (type IN (${EVENT_TYPES}) AND date(created_at) = date('now'))
+          (
+            type IN (${EVENT_TYPES})
+            AND (
+              (event_date IS NOT NULL AND event_date >= date('now'))
+              OR (event_date IS NULL AND date(created_at) = date('now'))
+            )
+          )
           OR
           (type NOT IN (${EVENT_TYPES}) AND created_at >= datetime('now', '-30 days'))
         )

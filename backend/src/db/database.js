@@ -53,6 +53,8 @@ const migrations = [
   "ALTER TABLE public_holidays ADD COLUMN end_date TEXT",
   // notifications dismiss
   "ALTER TABLE notifications ADD COLUMN dismissed INTEGER DEFAULT 0",
+  // event_date: actual date of the birthday/anniversary this notification is for
+  "ALTER TABLE notifications ADD COLUMN event_date TEXT",
   // family member UAE flag
   "ALTER TABLE family_members ADD COLUMN in_uae INTEGER DEFAULT 1",
   // compensatory days granted by admin
