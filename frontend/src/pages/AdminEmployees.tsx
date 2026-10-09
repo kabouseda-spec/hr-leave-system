@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
-import { PlusIcon, XMarkIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, XMarkIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
 interface Employee {
@@ -330,9 +330,25 @@ export default function AdminEmployees() {
           <h1 className="text-2xl font-bold text-gray-900">Employees</h1>
           <p className="text-gray-500 text-sm mt-0.5">{employees.filter(e => e.is_active).length} active employees</p>
         </div>
-        <button className="btn-primary" onClick={openCreate}>
-          <PlusIcon className="h-4 w-4" /> Add Employee
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="btn-secondary flex items-center gap-2 text-sm"
+            onClick={async () => {
+              const res = await api.get('/admin/export/birthdays', { responseType: 'blob' });
+              const url = URL.createObjectURL(res.data);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `birthdays-${dayjs().format('YYYY-MM-DD')}.xlsx`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" /> Birthdays Excel
+          </button>
+          <button className="btn-primary" onClick={openCreate}>
+            <PlusIcon className="h-4 w-4" /> Add Employee
+          </button>
+        </div>
       </div>
 
       {/* Visa expiry alerts */}

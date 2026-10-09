@@ -71,4 +71,88 @@ router.delete('/holidays/:id', auth, rbac('hr_admin'), (req, res) => {
   res.json({ message: 'Holiday deleted' });
 });
 
+// ── GET /admin/export/birthdays — Excel download ──────────────────────────────
+router.get('/export/birthdays', auth, rbac('hr_admin'), (req, res) => {
+  const XLSX = require('xlsx');
+
+  const employees = db.prepare(`
+    SELECT full_name, employee_number, department, job_title,
+           date_of_birth, spouse_name, spouse_dob, marriage_anniversary, hire_date
+    FROM employees WHERE is_active = 1
+    ORDER BY department, full_name
+  `).all();
+
+  const family = db.prepare(`
+    SELECT f.name, f.relationship, f.date_of_birth, f.gender,
+           e.full_name AS employee_name, e.department
+    FROM family_members f
+    JOIN employees e ON e.id = f.employee_id
+    WHERE f.date_of_birth IS NOT NULL AND f.in_uae = 1
+    ORDER BY e.department, e.full_name
+  `).all();
+
+  const fmt = (d) => d ? dayjs(d).format('DD MMM YYYY') : '';
+  const nextBirthday = (dob) => {
+    if (!dob) return '';
+    const today = dayjs();
+    let bd = dayjs(dob).year(today.year());
+    if (bd.isBefore(today, 'day')) bd = bd.add(1, 'year');
+    return bd.format('DD MMM YYYY');
+  };
+
+  // Sheet 1 — Employee birthdays
+  const empRows = employees.map(e => ({
+    'Employee #':        e.employee_number || '',
+    'Full Name':         e.full_name,
+    'Department':        e.department || '',
+    'Job Title':         e.job_title || '',
+    'Date of Birth':     fmt(e.date_of_birth),
+    'Next Birthday':     nextBirthday(e.date_of_birth),
+    'Spouse Name':       e.spouse_name || '',
+    'Spouse DOB':        fmt(e.spouse_dob),
+    'Spouse Next B\'day':nextBirthday(e.spouse_dob),
+    'Marriage Anniversary': fmt(e.marriage_anniversary),
+    'Hire Date':         fmt(e.hire_date),
+  }));
+
+  // Sheet 2 — Family members (children, siblings, etc.)
+  const famRows = family.map(f => ({
+    'Employee':        f.employee_name,
+    'Department':      f.department || '',
+    'Family Member':   f.name,
+    'Relationship':    f.relationship,
+    'Gender':          f.gender || '',
+    'Date of Birth':   fmt(f.date_of_birth),
+    'Next Birthday':   nextBirthday(f.date_of_birth),
+  }));
+
+  // Sheet 3 — All upcoming birthdays (next 365 days), sorted by date
+  const allEvents = [];
+  for (const e of employees) {
+    if (e.date_of_birth) {
+      const nb = nextBirthday(e.date_of_birth);
+      allEvents.push({ 'Next Birthday': nb, 'Person': e.full_name, 'Relation': 'Employee', 'Department': e.department || '', 'Employee': e.full_name });
+    }
+    if (e.spouse_dob) {
+      const nb = nextBirthday(e.spouse_dob);
+      allEvents.push({ 'Next Birthday': nb, 'Person': e.spouse_name || 'Spouse', 'Relation': 'Spouse', 'Department': e.department || '', 'Employee': e.full_name });
+    }
+  }
+  for (const f of family) {
+    const nb = nextBirthday(f.date_of_birth);
+    allEvents.push({ 'Next Birthday': nb, 'Person': f.name, 'Relation': f.relationship, 'Department': f.department || '', 'Employee': f.employee_name });
+  }
+  allEvents.sort((a, b) => dayjs(a['Next Birthday'], 'DD MMM YYYY').diff(dayjs(b['Next Birthday'], 'DD MMM YYYY')));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(empRows),    'Employees');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(famRows),    'Family Members');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allEvents),  'Upcoming (All)');
+
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Disposition', `attachment; filename="birthdays-${dayjs().format('YYYY-MM-DD')}.xlsx"`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buf);
+});
+
 module.exports = router;
