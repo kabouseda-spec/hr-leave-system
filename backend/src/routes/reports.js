@@ -9,6 +9,7 @@ const engine = require('../services/leaveEngine');
 // ── GET /reports/deductions — monthly leave log + salary deduction report ──────
 // Payroll cycle: 26th of previous month → 25th of current month
 router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
+  try {
   const monthParam = req.query.month || dayjs().format('YYYY-MM');
   const periodEnd   = `${monthParam}-25`;
   const prevMonth   = dayjs(`${monthParam}-01`).subtract(1, 'month');
@@ -108,6 +109,10 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
 
   const grand_total = Math.round(report.reduce((s, r) => s + r.total_deduction, 0) * 100) / 100;
   res.json({ month: monthParam, period_start: periodStart, period_end: periodEnd, report, grand_total });
+  } catch(e) {
+    console.error('[deductions]', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Full leave summary report (HR Admin / Manager)

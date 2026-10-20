@@ -64,18 +64,29 @@ function MonthPicker({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
+// Default to the most recently completed payroll cycle:
+// Payroll cuts off on the 25th, so if today is on or before the 25th, show the previous month.
+function defaultPayrollMonth(): string {
+  const today = dayjs();
+  return today.date() <= 25
+    ? today.subtract(1, 'month').format('YYYY-MM')
+    : today.format('YYYY-MM');
+}
+
 export default function AdminDeductions() {
-  const [month, setMonth]         = useState(dayjs().format('YYYY-MM'));
+  const [month, setMonth]         = useState(defaultPayrollMonth);
   const [report, setReport]       = useState<DeductionRow[]>([]);
   const [grandTotal, setGrandTotal] = useState(0);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd]     = useState('');
   const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
   const [expanded, setExpanded]   = useState<Record<string, boolean>>({});
   const [filter, setFilter]       = useState<'all' | 'deductions'>('all');
 
   useEffect(() => {
     setLoading(true);
+    setError('');
     api.get(`/reports/deductions?month=${month}`)
       .then(r => {
         setReport(r.data.report || []);
@@ -83,7 +94,12 @@ export default function AdminDeductions() {
         setPeriodStart(r.data.period_start || '');
         setPeriodEnd(r.data.period_end || '');
       })
-      .catch(() => { setReport([]); setGrandTotal(0); })
+      .catch(err => {
+        const msg = err.response?.data?.error || err.message || 'Failed to load report';
+        setError(msg);
+        setReport([]);
+        setGrandTotal(0);
+      })
       .finally(() => setLoading(false));
   }, [month]);
 
@@ -137,6 +153,12 @@ export default function AdminDeductions() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-red-700 text-sm">
+          <strong>Error loading report:</strong> {error}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
