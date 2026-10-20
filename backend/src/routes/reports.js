@@ -6,99 +6,93 @@ const rbac = require('../middleware/rbac');
 const dayjs = require('dayjs');
 const engine = require('../services/leaveEngine');
 
-// ── GET /reports/deductions — monthly salary deduction report ─────────────────
+// ── GET /reports/deductions — monthly leave log + salary deduction report ──────
 router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
-  // Default to current month
-  const monthParam = req.query.month || dayjs().format('YYYY-MM'); // e.g. "2026-06"
+  const monthParam = req.query.month || dayjs().format('YYYY-MM');
   const [year, month] = monthParam.split('-');
   const startOfMonth = `${year}-${month}-01`;
   const endOfMonth   = dayjs(startOfMonth).endOf('month').format('YYYY-MM-DD');
 
-  // All active employees
   const employees = db.prepare(
     "SELECT id, full_name, department, basic_salary FROM employees WHERE is_active = 1 ORDER BY department, full_name"
   ).all();
 
   const DAILY_DIVISOR  = 30;
   const HOURLY_DIVISOR = 30 * 8;
-
   const report = [];
 
   for (const emp of employees) {
-    const dailyRate  = emp.basic_salary / DAILY_DIVISOR;
-    const hourlyRate = emp.basic_salary / HOURLY_DIVISOR;
+    const dailyRate  = (emp.basic_salary || 0) / DAILY_DIVISOR;
+    const hourlyRate = (emp.basic_salary || 0) / HOURLY_DIVISOR;
 
-    // ── Leave-based deductions (approved requests overlapping this month) ────
-    const leaveRows = db.prepare(`
-      SELECT leave_type, unpaid_days, half_pay_days, paid_days, start_date, end_date, sub_type
+    // All approved leave requests overlapping this month
+    const allLeaveRows = db.prepare(`
+      SELECT leave_type, unpaid_days, half_pay_days, paid_days, total_days, start_date, end_date, sub_type
       FROM leave_requests
       WHERE employee_id = ?
         AND status = 'approved'
         AND start_date <= ?
         AND end_date   >= ?
-        AND (unpaid_days > 0 OR half_pay_days > 0)
     `).all(emp.id, endOfMonth, startOfMonth);
 
-    let unpaidDays   = 0;
-    let halfPayDays  = 0;
+    let unpaidDays = 0, halfPayDays = 0, totalLeaveDays = 0;
     const leaveItems = [];
 
-    for (const row of leaveRows) {
-      unpaidDays  += row.unpaid_days  || 0;
-      halfPayDays += row.half_pay_days || 0;
-      if ((row.unpaid_days || 0) > 0 || (row.half_pay_days || 0) > 0) {
-        leaveItems.push({
-          leave_type : row.leave_type,
-          sub_type   : row.sub_type || null,
-          start_date : row.start_date,
-          end_date   : row.end_date,
-          unpaid_days: row.unpaid_days || 0,
-          half_pay_days: row.half_pay_days || 0,
-          unpaid_deduction : Math.round((row.unpaid_days  || 0) * dailyRate  * 100) / 100,
-          half_pay_deduction: Math.round((row.half_pay_days || 0) * dailyRate / 2 * 100) / 100,
-        });
-      }
+    for (const row of allLeaveRows) {
+      totalLeaveDays += row.total_days || 0;
+      unpaidDays     += row.unpaid_days   || 0;
+      halfPayDays    += row.half_pay_days || 0;
+      leaveItems.push({
+        leave_type        : row.leave_type,
+        sub_type          : row.sub_type || null,
+        start_date        : row.start_date,
+        end_date          : row.end_date,
+        total_days        : row.total_days || 0,
+        paid_days         : row.paid_days  || 0,
+        unpaid_days       : row.unpaid_days    || 0,
+        half_pay_days     : row.half_pay_days  || 0,
+        unpaid_deduction  : Math.round((row.unpaid_days   || 0) * dailyRate       * 100) / 100,
+        half_pay_deduction: Math.round((row.half_pay_days || 0) * dailyRate / 2   * 100) / 100,
+      });
     }
 
-    // ── Personal time overage ────────────────────────────────────────────────
+    // Personal time overage
     const period    = dayjs(startOfMonth).month() < 6 ? `${year}-H1` : `${year}-H2`;
     const ptBalance = db.prepare(
       'SELECT allocated, used FROM personal_time_balances WHERE employee_id = ? AND period = ?'
     ).get(emp.id, period);
 
-    let personalHoursOver = 0;
-    let personalDeduction = 0;
+    let personalHoursOver = 0, personalDeduction = 0;
     if (ptBalance && ptBalance.used > ptBalance.allocated) {
       personalHoursOver = Math.round((ptBalance.used - ptBalance.allocated) * 100) / 100;
       personalDeduction = Math.round(personalHoursOver * hourlyRate * 100) / 100;
     }
 
-    const unpaidDeduction   = Math.round(unpaidDays  * dailyRate  * 100) / 100;
-    const halfPayDeduction  = Math.round(halfPayDays * dailyRate / 2 * 100) / 100;
-    const totalDeduction    = Math.round((unpaidDeduction + halfPayDeduction + personalDeduction) * 100) / 100;
+    const unpaidDeduction  = Math.round(unpaidDays  * dailyRate       * 100) / 100;
+    const halfPayDeduction = Math.round(halfPayDays * dailyRate / 2   * 100) / 100;
+    const totalDeduction   = Math.round((unpaidDeduction + halfPayDeduction + personalDeduction) * 100) / 100;
 
-    if (totalDeduction > 0) {
-      report.push({
-        employee_id      : emp.id,
-        full_name        : emp.full_name,
-        department       : emp.department,
-        basic_salary     : emp.basic_salary,
-        daily_rate       : Math.round(dailyRate  * 100) / 100,
-        hourly_rate      : Math.round(hourlyRate * 100) / 100,
-        unpaid_days,
-        half_pay_days    : halfPayDays,
-        personal_hours_over: personalHoursOver,
-        unpaid_deduction,
-        half_pay_deduction: halfPayDeduction,
-        personal_deduction: personalDeduction,
-        total_deduction  : totalDeduction,
-        leave_items      : leaveItems,
-      });
-    }
+    // Include ALL employees — zero-deduction rows still appear in the monthly log
+    report.push({
+      employee_id         : emp.id,
+      full_name           : emp.full_name,
+      department          : emp.department,
+      basic_salary        : emp.basic_salary || 0,
+      daily_rate          : Math.round(dailyRate  * 100) / 100,
+      hourly_rate         : Math.round(hourlyRate * 100) / 100,
+      total_leave_days    : totalLeaveDays,
+      unpaid_days,
+      half_pay_days       : halfPayDays,
+      personal_hours_over : personalHoursOver,
+      unpaid_deduction,
+      half_pay_deduction  : halfPayDeduction,
+      personal_deduction  : personalDeduction,
+      total_deduction     : totalDeduction,
+      leave_items         : leaveItems,
+    });
   }
 
   const grand_total = Math.round(report.reduce((s, r) => s + r.total_deduction, 0) * 100) / 100;
-
   res.json({ month: monthParam, report, grand_total });
 });
 

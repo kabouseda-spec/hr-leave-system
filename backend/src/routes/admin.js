@@ -71,6 +71,29 @@ router.delete('/holidays/:id', auth, rbac('hr_admin'), (req, res) => {
   res.json({ message: 'Holiday deleted' });
 });
 
+// ── Departments CRUD ──────────────────────────────────────────────────────────
+router.get('/departments', auth, (req, res) => {
+  const rows = db.prepare("SELECT * FROM departments ORDER BY name").all();
+  res.json(rows);
+});
+
+router.post('/departments', auth, rbac('hr_admin'), (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+  const { v4: uuidv4 } = require('uuid');
+  try {
+    db.prepare("INSERT INTO departments (id, name) VALUES (?, ?)").run(uuidv4(), name.trim());
+    res.json({ message: 'Department created' });
+  } catch(e) {
+    res.status(409).json({ error: 'Department already exists' });
+  }
+});
+
+router.delete('/departments/:id', auth, rbac('hr_admin'), (req, res) => {
+  db.prepare("DELETE FROM departments WHERE id = ?").run(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
 // ── GET /admin/export/birthdays — Excel download ──────────────────────────────
 router.get('/export/birthdays', auth, rbac('hr_admin'), (req, res) => {
   const XLSX = require('xlsx');

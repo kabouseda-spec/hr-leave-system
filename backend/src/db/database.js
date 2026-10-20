@@ -53,6 +53,12 @@ const migrations = [
   "ALTER TABLE public_holidays ADD COLUMN end_date TEXT",
   // owner flag — bypasses all RBAC
   "ALTER TABLE employees ADD COLUMN is_owner INTEGER DEFAULT 0",
+  // departments master list
+  `CREATE TABLE IF NOT EXISTS departments (
+    id   TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
   // notifications dismiss
   "ALTER TABLE notifications ADD COLUMN dismissed INTEGER DEFAULT 0",
   // event_date: actual date of the birthday/anniversary this notification is for
@@ -83,6 +89,16 @@ const migrations = [
 for (const sql of migrations) {
   try { db.exec(sql); } catch(e) { /* column already exists — skip */ }
 }
+
+// Seed departments from existing employee data (idempotent)
+try {
+  const { v4: _deptUuid } = require('uuid');
+  const existingDepts = db.prepare("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department != ''").all();
+  const insertDept = db.prepare("INSERT OR IGNORE INTO departments (id, name) VALUES (?, ?)");
+  for (const row of existingDepts) {
+    insertDept.run(_deptUuid(), row.department);
+  }
+} catch(e) { /* departments table not ready yet */ }
 
 // ── Seed new leave policy types (idempotent) ──────────────────────────────────
 const { v4: _uuidv4 } = require('uuid');

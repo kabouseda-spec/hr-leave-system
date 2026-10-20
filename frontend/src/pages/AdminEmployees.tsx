@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import api from '../api/client';
 import dayjs from 'dayjs';
-import { PlusIcon, XMarkIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, XMarkIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
 interface Employee {
@@ -36,11 +36,7 @@ interface FamilyMember {
   in_uae: number;
 }
 
-const DEPARTMENTS = [
-  'Top Management', 'HR', 'Engineering', 'AI', 'Design',
-  'Accounting', 'Finance', 'Sales', 'Sales Admin', 'Marketing',
-  'Shipping', 'Logistics', 'Operations', 'Execution', 'Legal', 'KMCI',
-];
+interface Department { id: string; name: string; }
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -55,7 +51,7 @@ function visaStatus(visa_expiry?: string) {
 
 const BLANK_FORM = {
   employee_number: '', full_name: '', email: '', password: '',
-  role: 'employee', department: 'Engineering',
+  role: 'employee', department: '',
   hire_date: dayjs().format('YYYY-MM-DD'),
   probation_end_date: dayjs().add(6, 'month').format('YYYY-MM-DD'),
   basic_salary: '', hra: '', other_allowance: '', manager_id: '',
@@ -78,6 +74,30 @@ export default function AdminEmployees() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [form, setForm] = useState({ ...BLANK_FORM });
+
+  // Departments
+  const [departments, setDepartments]       = useState<Department[]>([]);
+  const [showDeptMgr, setShowDeptMgr]       = useState(false);
+  const [newDeptName, setNewDeptName]       = useState('');
+  const [addingNewDept, setAddingNewDept]   = useState(false);
+  const [addingDeptInline, setAddingDeptInline] = useState(false);
+  const [inlineDeptName, setInlineDeptName] = useState('');
+
+  const loadDepartments = () => {
+    api.get('/admin/departments').then(r => setDepartments(r.data)).catch(() => {});
+  };
+
+  const createDepartment = async (name: string, onDone?: (id: string) => void) => {
+    if (!name.trim()) return;
+    try {
+      await api.post('/admin/departments', { name: name.trim() });
+      await api.get('/admin/departments').then(r => {
+        setDepartments(r.data);
+        const created = (r.data as Department[]).find(d => d.name === name.trim());
+        if (created && onDone) onDone(created.id);
+      });
+    } catch { /* duplicate — ignore */ }
+  };
   const [activeTab, setActiveTab] = useState<'info' | 'personal' | 'visa' | 'leaves' | 'adjustments'>('info');
   const [rolloverForm, setRolloverForm] = useState({ leave_type: 'annual', from_year: String(new Date().getFullYear() - 1), to_year: String(new Date().getFullYear()), days: '' });
   const [rolloverMsg, setRolloverMsg] = useState<string | null>(null);
@@ -200,7 +220,7 @@ export default function AdminEmployees() {
     setLoading(true);
     api.get('/employees').then(r => setEmployees(r.data)).finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadDepartments(); }, []);
 
   const openCreate = () => { setForm({ ...BLANK_FORM }); setEditing(null); setFamilyMembers([]); setActiveTab('info'); setShowForm(true); };
   const openEdit = async (emp: Employee) => {
@@ -372,13 +392,66 @@ export default function AdminEmployees() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <input className="input max-w-xs" placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input w-auto" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="">All departments</option>
-          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
+        <button
+          className="btn-secondary text-xs flex items-center gap-1.5"
+          onClick={() => setShowDeptMgr(v => !v)}
+        >
+          <Cog6ToothIcon className="h-4 w-4" /> Manage Departments
+        </button>
       </div>
+
+      {/* Department manager panel */}
+      {showDeptMgr && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-800">Departments</p>
+            <button onClick={() => setShowDeptMgr(false)} className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-4 w-4" /></button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {departments.map(d => (
+              <span key={d.id} className="flex items-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-full">
+                {d.name}
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete department "${d.name}"? Employees in this department will not be removed.`)) return;
+                    await api.delete(`/admin/departments/${d.id}`);
+                    loadDepartments();
+                  }}
+                  className="text-gray-300 hover:text-red-500 ml-1 transition-colors"
+                >
+                  <XMarkIcon className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <input
+              className="input flex-1 text-sm"
+              placeholder="New department name…"
+              value={newDeptName}
+              onChange={e => setNewDeptName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createDepartment(newDeptName, () => setNewDeptName('')); } }}
+            />
+            <button
+              className="btn-primary text-sm"
+              disabled={!newDeptName.trim() || addingNewDept}
+              onClick={async () => {
+                setAddingNewDept(true);
+                await createDepartment(newDeptName, () => setNewDeptName(''));
+                setAddingNewDept(false);
+              }}
+            >
+              {addingNewDept ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Employee table */}
       <div className="card p-0 overflow-auto">
@@ -514,9 +587,47 @@ export default function AdminEmployees() {
                     </div>
                     <div>
                       <label className="label">Department</label>
-                      <select className="input" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
-                        {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
+                      {addingDeptInline ? (
+                        <div className="flex gap-2">
+                          <input
+                            className="input flex-1"
+                            placeholder="New department name…"
+                            value={inlineDeptName}
+                            autoFocus
+                            onChange={e => setInlineDeptName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Escape') { setAddingDeptInline(false); setInlineDeptName(''); }
+                            }}
+                          />
+                          <button type="button" className="btn-primary text-sm px-3"
+                            disabled={!inlineDeptName.trim()}
+                            onClick={async () => {
+                              await createDepartment(inlineDeptName, () => {
+                                setForm(f => ({ ...f, department: inlineDeptName.trim() }));
+                                setInlineDeptName('');
+                                setAddingDeptInline(false);
+                              });
+                            }}>
+                            Add
+                          </button>
+                          <button type="button" className="btn-secondary text-sm px-2"
+                            onClick={() => { setAddingDeptInline(false); setInlineDeptName(''); }}>
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <select className="input flex-1" value={form.department}
+                            onChange={e => {
+                              if (e.target.value === '__add_new__') { setAddingDeptInline(true); }
+                              else { setForm(f => ({ ...f, department: e.target.value })); }
+                            }}>
+                            <option value="">— Select department —</option>
+                            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                            <option value="__add_new__">+ Add new department…</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="label">Hire Date</label>
