@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 interface LeaveItem {
   leave_type: string;
@@ -38,9 +40,18 @@ const LEAVE_LABELS: Record<string, string> = {
 };
 
 export default function MyDeductions() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [month, setMonth] = useState(dayjs().format('YYYY-MM'));
   const [data, setData] = useState<PayslipData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Admin/owner accounts should see the full Payroll Leave Log, not a personal payslip
+  useEffect(() => {
+    if (user?.role === 'hr_admin' || user?.is_owner) {
+      navigate('/admin/deductions', { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     setLoading(true);

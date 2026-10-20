@@ -58,7 +58,9 @@ export default function Layout() {
           <NavItem to="/leave/request" icon={DocumentPlusIcon} label="Request Leave" />
           <NavItem to="/leave/history" icon={CalendarDaysIcon} label="My Leaves" />
           <NavItem to="/personal-time" icon={ClockIcon} label="Personal Time" />
-          <NavItem to="/deductions" icon={CreditCardIcon} label="Deductions" />
+          {!(user?.role === 'hr_admin' || user?.is_owner) && (
+            <NavItem to="/deductions" icon={CreditCardIcon} label="Deductions" />
+          )}
           <NavItem to="/calendar" icon={CalendarDaysIcon} label="Team Calendar" />
 
           {(user?.role === 'manager' || user?.role === 'hr_admin' || user?.is_owner) && (
@@ -70,7 +72,7 @@ export default function Layout() {
               <NavItem to="/leave/employee-leaves" icon={ClipboardDocumentListIcon} label="Employee Leaves" />
               <NavItem to="/admin/reports" icon={ChartBarIcon} label="Reports" />
               {(user?.role === 'hr_admin' || user?.is_owner) && (
-                <NavItem to="/admin/deductions" icon={BanknotesIcon} label="Deductions" />
+                <NavItem to="/admin/deductions" icon={BanknotesIcon} label="Payroll Leave Log" />
               )}
             </>
           )}
