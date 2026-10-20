@@ -14,6 +14,20 @@ router.get('/', (req, res) => {
   }
 });
 
+// Diagnostic: show leave request summary (no auth — for debugging)
+router.get('/leaves', (req, res) => {
+  try {
+    const total   = db.prepare("SELECT COUNT(*) as c FROM leave_requests").get();
+    const byType  = db.prepare("SELECT leave_type, status, COUNT(*) as c, SUM(total_days) as total_days, SUM(unpaid_days) as unpaid_days, SUM(paid_days) as paid_days FROM leave_requests GROUP BY leave_type, status").all();
+    const unpaidOk   = db.prepare("SELECT COUNT(*) as c FROM leave_requests WHERE leave_type='unpaid' AND unpaid_days > 0 AND status='approved'").get();
+    const unpaidBad  = db.prepare("SELECT COUNT(*) as c FROM leave_requests WHERE leave_type='unpaid' AND unpaid_days = 0 AND total_days > 0 AND status='approved'").get();
+    const sample  = db.prepare("SELECT lr.id, e.full_name, lr.leave_type, lr.start_date, lr.end_date, lr.total_days, lr.paid_days, lr.unpaid_days, lr.half_pay_days, lr.status FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id ORDER BY lr.start_date DESC LIMIT 20").all();
+    res.json({ total: total?.c, byType, unpaidCorrect: unpaidOk?.c, unpaidCorrupted: unpaidBad?.c, recentSample: sample });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 // HR Admin only — permanently delete employee + all their data by email
 router.delete('/employee/:email', auth, rbac('hr_admin'), (req, res) => {
   try {
