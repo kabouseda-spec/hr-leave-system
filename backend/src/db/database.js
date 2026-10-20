@@ -90,6 +90,22 @@ for (const sql of migrations) {
   try { db.exec(sql); } catch(e) { /* column already exists — skip */ }
 }
 
+// ── One-time repair: fix backdate-bug corruption on unpaid leave records ──────
+// The old backdate endpoint had: paid = parseFloat(paid_days || 0) || totalDays
+// This caused paid=totalDays when paid_days=0, so unpaid_days was never stored.
+// Fix: for leave_type='unpaid' where unpaid_days=0, set unpaid_days=total_days, paid_days=0.
+try {
+  db.exec(`
+    UPDATE leave_requests
+    SET unpaid_days = total_days,
+        paid_days   = 0
+    WHERE leave_type = 'unpaid'
+      AND unpaid_days = 0
+      AND total_days > 0
+      AND status = 'approved'
+  `);
+} catch(e) { /* ignore */ }
+
 // Seed departments from existing employee data (idempotent)
 try {
   const { v4: _deptUuid } = require('uuid');

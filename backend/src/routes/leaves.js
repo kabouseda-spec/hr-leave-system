@@ -501,12 +501,27 @@ router.post('/admin/backdate', auth, rbac('hr_admin'), (req, res) => {
   if (overlap.hasOverlap)
     return res.status(422).json({ error: overlap.reason });
 
-  const totalDays = parseFloat(paid_days || 0) + parseFloat(half_pay_days || 0) + parseFloat(unpaid_days || 0)
-    || engine.countWorkingDays(start_date, end);
+  const paidIn   = paid_days   !== undefined && paid_days   !== null && paid_days   !== '' ? parseFloat(paid_days)   : null;
+  const halfIn   = half_pay_days !== undefined && half_pay_days !== null && half_pay_days !== '' ? parseFloat(half_pay_days) : null;
+  const unpaidIn = unpaid_days !== undefined && unpaid_days !== null && unpaid_days !== '' ? parseFloat(unpaid_days) : null;
 
-  const paid   = parseFloat(paid_days || 0) || totalDays;
-  const half   = parseFloat(half_pay_days || 0);
-  const unpaid = parseFloat(unpaid_days || 0);
+  const totalDays = (paidIn !== null || halfIn !== null || unpaidIn !== null)
+    ? (paidIn || 0) + (halfIn || 0) + (unpaidIn || 0) || engine.countWorkingDays(start_date, end)
+    : engine.countWorkingDays(start_date, end);
+
+  // Unpaid leave: if type is 'unpaid' and no explicit breakdown supplied, all days are unpaid
+  let paid, half, unpaid;
+  if (paidIn === null && halfIn === null && unpaidIn === null) {
+    if (leave_type === 'unpaid') {
+      paid = 0; half = 0; unpaid = totalDays;
+    } else {
+      paid = totalDays; half = 0; unpaid = 0;
+    }
+  } else {
+    paid   = paidIn   ?? 0;
+    half   = halfIn   ?? 0;
+    unpaid = unpaidIn ?? 0;
+  }
 
   const rollover = engine.getRolloverPeriod(employee.hire_date, start_date);
   const policy = db.prepare('SELECT * FROM leave_policies WHERE leave_type=?').get(leave_type);

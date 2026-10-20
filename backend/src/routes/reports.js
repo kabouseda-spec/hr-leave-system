@@ -39,20 +39,32 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
     const leaveItems = [];
 
     for (const row of allLeaveRows) {
-      totalLeaveDays += row.total_days || 0;
-      unpaidDays     += row.unpaid_days   || 0;
-      halfPayDays    += row.half_pay_days || 0;
+      const rowTotal = row.total_days || 0;
+
+      // Heal corrupted records: if leave_type='unpaid' but unpaid_days=0 with paid_days>0,
+      // the backdate bug stored paid instead of unpaid. Treat all days as unpaid.
+      let rowUnpaid  = row.unpaid_days   || 0;
+      let rowHalf    = row.half_pay_days || 0;
+      let rowPaid    = row.paid_days     || 0;
+      if (row.leave_type === 'unpaid' && rowUnpaid === 0 && rowTotal > 0) {
+        rowUnpaid = rowTotal;
+        rowPaid   = 0;
+      }
+
+      totalLeaveDays += rowTotal;
+      unpaidDays     += rowUnpaid;
+      halfPayDays    += rowHalf;
       leaveItems.push({
         leave_type        : row.leave_type,
         sub_type          : row.sub_type || null,
         start_date        : row.start_date,
         end_date          : row.end_date,
-        total_days        : row.total_days || 0,
-        paid_days         : row.paid_days  || 0,
-        unpaid_days       : row.unpaid_days    || 0,
-        half_pay_days     : row.half_pay_days  || 0,
-        unpaid_deduction  : Math.round((row.unpaid_days   || 0) * dailyRate       * 100) / 100,
-        half_pay_deduction: Math.round((row.half_pay_days || 0) * dailyRate / 2   * 100) / 100,
+        total_days        : rowTotal,
+        paid_days         : rowPaid,
+        unpaid_days       : rowUnpaid,
+        half_pay_days     : rowHalf,
+        unpaid_deduction  : Math.round(rowUnpaid * dailyRate       * 100) / 100,
+        half_pay_deduction: Math.round(rowHalf   * dailyRate / 2   * 100) / 100,
       });
     }
 
@@ -232,19 +244,25 @@ router.get('/payslip', auth, (req, res) => {
   let totalUnpaidDays = 0, totalHalfPayDays = 0;
   const leaveItems = [];
   for (const l of leaves) {
-    totalUnpaidDays += l.unpaid_days || 0;
-    totalHalfPayDays += l.half_pay_days || 0;
-    if ((l.unpaid_days || 0) > 0 || (l.half_pay_days || 0) > 0) {
+    // Heal corrupted 'unpaid' records (backdate bug: paid stored instead of unpaid)
+    let lUnpaid = l.unpaid_days || 0;
+    let lHalf   = l.half_pay_days || 0;
+    if (l.leave_type === 'unpaid' && lUnpaid === 0 && (l.total_days || 0) > 0) {
+      lUnpaid = l.total_days;
+    }
+    totalUnpaidDays  += lUnpaid;
+    totalHalfPayDays += lHalf;
+    if (lUnpaid > 0 || lHalf > 0) {
       const dailyRate = l.leave_type === 'annual' ? fullSalary / 22 : fullSalary / 30;
       leaveItems.push({
         leave_type: l.leave_type,
         start_date: l.start_date,
         end_date: l.end_date,
         total_days: l.total_days,
-        unpaid_days: l.unpaid_days,
-        half_pay_days: l.half_pay_days,
+        unpaid_days: lUnpaid,
+        half_pay_days: lHalf,
         daily_rate: Math.round(dailyRate * 100) / 100,
-        deduction: Math.round(((l.unpaid_days || 0) * dailyRate + (l.half_pay_days || 0) * dailyRate / 2) * 100) / 100,
+        deduction: Math.round((lUnpaid * dailyRate + lHalf * dailyRate / 2) * 100) / 100,
       });
     }
   }
