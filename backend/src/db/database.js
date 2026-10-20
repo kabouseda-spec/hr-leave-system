@@ -93,18 +93,56 @@ for (const sql of migrations) {
 // ── One-time repair: fix backdate-bug corruption on unpaid leave records ──────
 // The old backdate endpoint had: paid = parseFloat(paid_days || 0) || totalDays
 // This caused paid=totalDays when paid_days=0, so unpaid_days was never stored.
-// Fix: for leave_type='unpaid' where unpaid_days=0, set unpaid_days=total_days, paid_days=0.
+//
+// Affected records: leave_type='unpaid', status='approved', unpaid_days=0
+// Fix:
+//   1. Correct leave_requests: unpaid_days = total_days, paid_days = 0
+//   2. Correct leave_balances: move used_paid → used_unpaid for the same employee/year
 try {
-  db.exec(`
-    UPDATE leave_requests
-    SET unpaid_days = total_days,
-        paid_days   = 0
-    WHERE leave_type = 'unpaid'
-      AND unpaid_days = 0
-      AND total_days > 0
-      AND status = 'approved'
-  `);
-} catch(e) { /* ignore */ }
+  // Step 1 — find corrupted records
+  const corrupted = db.prepare(`
+    SELECT id, employee_id, total_days, start_date, hire_date
+    FROM leave_requests lr
+    JOIN employees e ON e.id = lr.employee_id
+    WHERE lr.leave_type = 'unpaid'
+      AND lr.unpaid_days = 0
+      AND lr.total_days > 0
+      AND lr.status = 'approved'
+  `).all();
+
+  if (corrupted.length > 0) {
+    const { getRolloverPeriod } = (() => {
+      // Inline minimal rollover calc to avoid circular require at startup
+      const dayjs = require('dayjs');
+      function getRolloverPeriod(hireDate, refDate) {
+        const hire = dayjs(hireDate);
+        const ref  = dayjs(refDate || dayjs());
+        const rolloverMonth = hire.month();
+        let periodStartYear = ref.year();
+        if (ref.month() < rolloverMonth) periodStartYear = ref.year() - 1;
+        return { year: periodStartYear };
+      }
+      return { getRolloverPeriod };
+    })();
+
+    const fixReq = db.prepare(`
+      UPDATE leave_requests SET unpaid_days = total_days, paid_days = 0
+      WHERE id = ?
+    `);
+    const fixBal = db.prepare(`
+      UPDATE leave_balances
+      SET used_paid    = MAX(0, used_paid - ?),
+          used_unpaid  = used_unpaid + ?
+      WHERE employee_id = ? AND leave_type = 'unpaid' AND year = ?
+    `);
+
+    for (const r of corrupted) {
+      fixReq.run(r.id);
+      const { year } = getRolloverPeriod(r.hire_date, r.start_date);
+      fixBal.run(r.total_days, r.total_days, r.employee_id, year);
+    }
+  }
+} catch(e) { /* ignore startup errors */ }
 
 // Seed departments from existing employee data (idempotent)
 try {

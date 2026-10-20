@@ -43,10 +43,18 @@ function fmt(n: number) {
   return n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const SYSTEM_START = dayjs('2025-01-01');
+
 function MonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const months = [];
-  for (let i = 11; i >= 0; i--) months.push(dayjs().subtract(i, 'month'));
-  for (let i = 1; i <= 3; i++)  months.push(dayjs().add(i, 'month'));
+  const months: dayjs.Dayjs[] = [];
+  const end = dayjs().add(3, 'month');
+  let cur = SYSTEM_START;
+  while (cur.isBefore(end) || cur.isSame(end, 'month')) {
+    months.push(cur);
+    cur = cur.add(1, 'month');
+  }
+  // Most-recent first
+  months.reverse();
   return (
     <select className="input w-auto" value={value} onChange={e => onChange(e.target.value)}>
       {months.map(m => (
