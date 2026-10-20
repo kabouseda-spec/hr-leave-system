@@ -7,11 +7,12 @@ const dayjs = require('dayjs');
 const engine = require('../services/leaveEngine');
 
 // ── GET /reports/deductions — monthly leave log + salary deduction report ──────
+// Payroll cycle: 26th of previous month → 25th of current month
 router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
   const monthParam = req.query.month || dayjs().format('YYYY-MM');
-  const [year, month] = monthParam.split('-');
-  const startOfMonth = `${year}-${month}-01`;
-  const endOfMonth   = dayjs(startOfMonth).endOf('month').format('YYYY-MM-DD');
+  const periodEnd   = `${monthParam}-25`;
+  const prevMonth   = dayjs(`${monthParam}-01`).subtract(1, 'month');
+  const periodStart = `${prevMonth.format('YYYY-MM')}-26`;
 
   const employees = db.prepare(
     "SELECT id, full_name, department, basic_salary FROM employees WHERE is_active = 1 ORDER BY department, full_name"
@@ -25,7 +26,7 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
     const dailyRate  = (emp.basic_salary || 0) / DAILY_DIVISOR;
     const hourlyRate = (emp.basic_salary || 0) / HOURLY_DIVISOR;
 
-    // All approved leave requests overlapping this month
+    // All approved leave requests overlapping this payroll period (26th prev → 25th current)
     const allLeaveRows = db.prepare(`
       SELECT leave_type, unpaid_days, half_pay_days, paid_days, total_days, start_date, end_date, sub_type
       FROM leave_requests
@@ -33,7 +34,7 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
         AND status = 'approved'
         AND start_date <= ?
         AND end_date   >= ?
-    `).all(emp.id, endOfMonth, startOfMonth);
+    `).all(emp.id, periodEnd, periodStart);
 
     let unpaidDays = 0, halfPayDays = 0, totalLeaveDays = 0;
     const leaveItems = [];
@@ -68,8 +69,9 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
       });
     }
 
-    // Personal time overage
-    const period    = dayjs(startOfMonth).month() < 6 ? `${year}-H1` : `${year}-H2`;
+    // Personal time overage — use the payroll period end month
+    const [peYear, peMon] = monthParam.split('-');
+    const period    = parseInt(peMon) <= 6 ? `${peYear}-H1` : `${peYear}-H2`;
     const ptBalance = db.prepare(
       'SELECT allocated, used FROM personal_time_balances WHERE employee_id = ? AND period = ?'
     ).get(emp.id, period);
@@ -105,7 +107,7 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
   }
 
   const grand_total = Math.round(report.reduce((s, r) => s + r.total_deduction, 0) * 100) / 100;
-  res.json({ month: monthParam, report, grand_total });
+  res.json({ month: monthParam, period_start: periodStart, period_end: periodEnd, report, grand_total });
 });
 
 // Full leave summary report (HR Admin / Manager)
@@ -221,9 +223,10 @@ router.get('/payslip', auth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
   const monthParam = req.query.month || dayjs().format('YYYY-MM');
-  const [year, month] = monthParam.split('-');
-  const startOfMonth = `${year}-${month}-01`;
-  const endOfMonth = dayjs(startOfMonth).endOf('month').format('YYYY-MM-DD');
+  // Payroll cycle: 26th of previous month → 25th of current month
+  const payPeriodEnd   = `${monthParam}-25`;
+  const payPrevMonth   = dayjs(`${monthParam}-01`).subtract(1, 'month');
+  const payPeriodStart = `${payPrevMonth.format('YYYY-MM')}-26`;
 
   const emp = db.prepare('SELECT * FROM employees WHERE id=?').get(employeeId);
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
@@ -233,13 +236,13 @@ router.get('/payslip', auth, (req, res) => {
   const otherAllowance = emp.other_allowance || 0;
   const fullSalary = basicSalary + hra + otherAllowance;
 
-  // Approved leaves this month with deductions
+  // Approved leaves in this payroll cycle (26th prev → 25th current)
   const leaves = db.prepare(`
     SELECT leave_type, start_date, end_date, total_days, paid_days, half_pay_days, unpaid_days, is_half_day
     FROM leave_requests
     WHERE employee_id=? AND status='approved'
       AND start_date <= ? AND end_date >= ?
-  `).all(employeeId, endOfMonth, startOfMonth);
+  `).all(employeeId, payPeriodEnd, payPeriodStart);
 
   let totalUnpaidDays = 0, totalHalfPayDays = 0;
   const leaveItems = [];
@@ -267,8 +270,9 @@ router.get('/payslip', auth, (req, res) => {
     }
   }
 
-  // Personal time deduction
-  const period = dayjs(startOfMonth).month() < 6 ? `${year}-H1` : `${year}-H2`;
+  // Personal time deduction — based on the payroll period's end month
+  const [psYear, psMon] = monthParam.split('-');
+  const period = parseInt(psMon) <= 6 ? `${psYear}-H1` : `${psYear}-H2`;
   const ptBalance = db.prepare('SELECT allocated, used FROM personal_time_balances WHERE employee_id=? AND period=?').get(employeeId, period);
   const personalHoursOver = ptBalance && ptBalance.used > ptBalance.allocated ? ptBalance.used - ptBalance.allocated : 0;
   const hourlyRate = basicSalary / 30 / 8;
@@ -287,6 +291,8 @@ router.get('/payslip', auth, (req, res) => {
 
   res.json({
     month: monthParam,
+    period_start: payPeriodStart,
+    period_end: payPeriodEnd,
     employee: { id: emp.id, name: emp.full_name, employee_number: emp.employee_number, department: emp.department, hire_date: emp.hire_date },
     salary: { basic: basicSalary, hra, other: otherAllowance, total: fullSalary },
     leaves: leaveItems,

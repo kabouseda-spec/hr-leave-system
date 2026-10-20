@@ -15,6 +15,8 @@ interface LeaveItem {
 
 interface PayslipData {
   month: string;
+  period_start: string;
+  period_end: string;
   salary: { basic: number; hra: number; other: number; total: number };
   leaves: LeaveItem[];
   personal_time_deduction: number;
@@ -55,7 +57,12 @@ export default function MyDeductions() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Deductions</h1>
-          <p className="text-sm text-gray-500 mt-1">Salary deductions for the selected month</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {data?.period_start && data?.period_end
+              ? `Payroll cycle: ${dayjs(data.period_start).format('D MMM')} – ${dayjs(data.period_end).format('D MMM YYYY')}`
+              : 'Salary deductions for the selected payroll cycle'
+            }
+          </p>
         </div>
         <input
           type="month"
@@ -76,8 +83,13 @@ export default function MyDeductions() {
       ) : data.total_deduction === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
           <div className="text-4xl mb-3">✅</div>
-          <p className="text-gray-700 font-medium">No deductions for {dayjs(month).format('MMMM YYYY')}</p>
-          <p className="text-gray-400 text-sm mt-1">Your full salary will be paid this month.</p>
+          <p className="text-gray-700 font-medium">No deductions for {dayjs(month).format('MMMM YYYY')} payroll</p>
+          <p className="text-gray-400 text-sm mt-1">
+            {data?.period_start && data?.period_end
+              ? `Cycle: ${dayjs(data.period_start).format('D MMM')} – ${dayjs(data.period_end).format('D MMM YYYY')}`
+              : 'Your full salary will be paid this month.'
+            }
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -157,7 +169,10 @@ export default function MyDeductions() {
 
           {/* Total row */}
           <div className="bg-gray-800 rounded-xl px-5 py-4 flex items-center justify-between text-white">
-            <p className="font-semibold">Total Deductions — {dayjs(month).format('MMMM YYYY')}</p>
+            <p className="font-semibold">
+              Total Deductions — {dayjs(month).format('MMMM YYYY')} payroll
+              {data?.period_start && <span className="font-normal text-gray-400 text-sm ml-2">({dayjs(data.period_start).format('D MMM')} – {dayjs(data.period_end).format('D MMM')})</span>}
+            </p>
             <p className="text-xl font-bold text-red-300">− {fmt(data.total_deduction)}</p>
           </div>
         </div>

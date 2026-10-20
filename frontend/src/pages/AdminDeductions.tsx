@@ -57,17 +57,24 @@ function MonthPicker({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 export default function AdminDeductions() {
-  const [month, setMonth]       = useState(dayjs().format('YYYY-MM'));
-  const [report, setReport]     = useState<DeductionRow[]>([]);
+  const [month, setMonth]         = useState(dayjs().format('YYYY-MM'));
+  const [report, setReport]       = useState<DeductionRow[]>([]);
   const [grandTotal, setGrandTotal] = useState(0);
-  const [loading, setLoading]   = useState(true);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [filter, setFilter]     = useState<'all' | 'deductions'>('all');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd]     = useState('');
+  const [loading, setLoading]     = useState(true);
+  const [expanded, setExpanded]   = useState<Record<string, boolean>>({});
+  const [filter, setFilter]       = useState<'all' | 'deductions'>('all');
 
   useEffect(() => {
     setLoading(true);
     api.get(`/reports/deductions?month=${month}`)
-      .then(r => { setReport(r.data.report || []); setGrandTotal(r.data.grand_total || 0); })
+      .then(r => {
+        setReport(r.data.report || []);
+        setGrandTotal(r.data.grand_total || 0);
+        setPeriodStart(r.data.period_start || '');
+        setPeriodEnd(r.data.period_end || '');
+      })
       .catch(() => { setReport([]); setGrandTotal(0); })
       .finally(() => setLoading(false));
   }, [month]);
@@ -107,9 +114,12 @@ export default function AdminDeductions() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Monthly Leave Log</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Payroll Leave Log</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            All employees — leave taken, unpaid days, and salary deductions.
+            {periodStart && periodEnd
+              ? <>Payroll cycle: <strong>{dayjs(periodStart).format('D MMM YYYY')}</strong> → <strong>{dayjs(periodEnd).format('D MMM YYYY')}</strong></>
+              : 'All employees — leave taken, unpaid days, and salary deductions.'
+            }
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">
@@ -294,9 +304,12 @@ export default function AdminDeductions() {
             <div className="bg-red-50 border border-red-200 rounded-2xl px-6 py-4 flex items-center justify-between">
               <div>
                 <p className="font-semibold text-red-900">
-                  Total payroll deductions — {dayjs(month).format('MMMM YYYY')}
+                  Total deductions — {dayjs(month).format('MMMM YYYY')} payroll
                 </p>
                 <p className="text-xs text-red-600 mt-0.5">
+                  {periodStart && periodEnd
+                    ? `${dayjs(periodStart).format('D MMM')} – ${dayjs(periodEnd).format('D MMM YYYY')} · `
+                    : ''}
                   {withDeductions} employee{withDeductions !== 1 ? 's' : ''} affected
                 </p>
               </div>
