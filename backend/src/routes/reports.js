@@ -19,13 +19,15 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
     "SELECT id, full_name, department, basic_salary FROM employees WHERE is_active = 1 ORDER BY department, full_name"
   ).all();
 
-  const DAILY_DIVISOR  = 30;
   const HOURLY_DIVISOR = 30 * 8;
   const report = [];
 
+  // Sick leave: salary/30. Unpaid leave type: salary/22. Everything else: salary/30.
+  const leaveDailyDivisor = (leaveType) => leaveType === 'unpaid' ? 22 : 30;
+
   for (const emp of employees) {
-    const dailyRate  = (emp.basic_salary || 0) / DAILY_DIVISOR;
-    const hourlyRate = (emp.basic_salary || 0) / HOURLY_DIVISOR;
+    const defaultDailyRate = (emp.basic_salary || 0) / 30;
+    const hourlyRate       = (emp.basic_salary || 0) / HOURLY_DIVISOR;
 
     // All approved leave requests overlapping this payroll period (26th prev → 25th current)
     const allLeaveRows = db.prepare(`
@@ -53,6 +55,7 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
         rowPaid   = 0;
       }
 
+      const itemDailyRate = (emp.basic_salary || 0) / leaveDailyDivisor(row.leave_type);
       totalLeaveDays += rowTotal;
       unpaidDays     += rowUnpaid;
       halfPayDays    += rowHalf;
@@ -65,8 +68,9 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
         paid_days         : rowPaid,
         unpaid_days       : rowUnpaid,
         half_pay_days     : rowHalf,
-        unpaid_deduction  : Math.round(rowUnpaid * dailyRate       * 100) / 100,
-        half_pay_deduction: Math.round(rowHalf   * dailyRate / 2   * 100) / 100,
+        daily_rate        : Math.round(itemDailyRate * 100) / 100,
+        unpaid_deduction  : Math.round(rowUnpaid * itemDailyRate       * 100) / 100,
+        half_pay_deduction: Math.round(rowHalf   * itemDailyRate / 2   * 100) / 100,
       });
     }
 
@@ -83,8 +87,9 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
       personalDeduction = Math.round(personalHoursOver * hourlyRate * 100) / 100;
     }
 
-    const unpaidDeduction  = Math.round(unpaidDays  * dailyRate       * 100) / 100;
-    const halfPayDeduction = Math.round(halfPayDays * dailyRate / 2   * 100) / 100;
+    // Sum deductions from items (rates vary by leave type)
+    const unpaidDeduction  = Math.round(leaveItems.reduce((s, l) => s + l.unpaid_deduction,   0) * 100) / 100;
+    const halfPayDeduction = Math.round(leaveItems.reduce((s, l) => s + l.half_pay_deduction, 0) * 100) / 100;
     const totalDeduction   = Math.round((unpaidDeduction + halfPayDeduction + personalDeduction) * 100) / 100;
 
     // Include ALL employees — zero-deduction rows still appear in the monthly log
@@ -93,7 +98,7 @@ router.get('/deductions', auth, rbac('hr_admin'), (req, res) => {
       full_name           : emp.full_name,
       department          : emp.department,
       basic_salary        : emp.basic_salary || 0,
-      daily_rate          : Math.round(dailyRate  * 100) / 100,
+      daily_rate          : Math.round(defaultDailyRate * 100) / 100,
       hourly_rate         : Math.round(hourlyRate * 100) / 100,
       total_leave_days    : totalLeaveDays,
       unpaid_days         : unpaidDays,
@@ -261,7 +266,7 @@ router.get('/payslip', auth, (req, res) => {
     totalUnpaidDays  += lUnpaid;
     totalHalfPayDays += lHalf;
     if (lUnpaid > 0 || lHalf > 0) {
-      const dailyRate = l.leave_type === 'annual' ? fullSalary / 22 : fullSalary / 30;
+      const dailyRate = l.leave_type === 'unpaid' ? fullSalary / 22 : fullSalary / 30;
       leaveItems.push({
         leave_type: l.leave_type,
         start_date: l.start_date,
