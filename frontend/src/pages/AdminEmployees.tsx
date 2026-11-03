@@ -260,6 +260,7 @@ export default function AdminEmployees() {
       setForm({
         employee_number: emp.employee_number, full_name: emp.full_name,
         email: emp.email, password: '', role: emp.role, department: emp.department,
+        product_category: (emp as any).product_category || '',
         hire_date: emp.hire_date, probation_end_date: emp.probation_end_date || '',
         basic_salary: String(emp.basic_salary), manager_id: '',
         passport_number: emp.passport_number || '', passport_expiry: emp.passport_expiry || '',
