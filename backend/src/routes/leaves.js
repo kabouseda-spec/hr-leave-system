@@ -10,7 +10,7 @@ const rbac = require('../middleware/rbac');
 const engine = require('../services/leaveEngine');
 
 const n = v => (v === undefined ? null : v);
-const { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail } = require('../services/emailService');
+const { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveApprovedNotifyEmail } = require('../services/emailService');
 
 // ── File upload (medical certificates) ───────────────────────────────────────
 const storage = multer.diskStorage({
@@ -247,17 +247,44 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
     .run(uuidv4(), req.user.id, 'approve', 'leave_request', row.id);
 
   const approver = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
+  const approvedByName = approver?.full_name || 'HR Admin';
+
+  // Email the employee
   if (row.employee_email) {
-    const tpl = leaveApprovedEmail({
+    sendEmail({ to: row.employee_email, ...leaveApprovedEmail({
       employeeName: row.employee_name,
       leaveType: row.leave_type,
       startDate: row.start_date,
       endDate: row.end_date,
       totalDays: row.total_days,
-      approvedByName: approver?.full_name || 'HR Admin',
-    });
-    sendEmail({ to: row.employee_email, ...tpl });
+      approvedByName,
+    })});
   }
+
+  // Notify the direct manager, all HR admins, and the owner — read from the DB
+  const notifyRecipients = db.prepare(`
+    SELECT full_name, email FROM employees
+    WHERE is_active = 1
+      AND email != ?
+      AND (
+        id = ?
+        OR role = 'hr_admin'
+        OR is_owner = 1
+      )
+  `).all(row.employee_email || '', row.manager_id || '');
+
+  notifyRecipients.forEach(r => {
+    if (!r.email) return;
+    sendEmail({ to: r.email, ...leaveApprovedNotifyEmail({
+      recipientName: r.full_name,
+      employeeName: row.employee_name,
+      leaveType: row.leave_type,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      totalDays: row.total_days,
+      approvedByName,
+    })});
+  });
 
   res.json({ message: 'Approved' });
 });
