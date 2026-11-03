@@ -198,16 +198,33 @@ function applyFridayMondayRule(startDate, endDate, leaveType) {
 }
 
 // ── Department gap (annual leave, same dept, 5 working days apart) ────────────
-function checkDepartmentGap(employeeId, department, startDate, leaveType) {
+// Sales employees: scoped to product_category (IPG/EPG/SAPG) so each category is independent.
+const SALES_DEPTS = ['sales', 'sales admin'];
+function checkDepartmentGap(employeeId, department, startDate, leaveType, productCategory) {
   if (leaveType !== 'annual') return { blocked: false };
-  const nearby = db.prepare(`
-    SELECT lr.start_date, e.full_name
-    FROM leave_requests lr
-    JOIN employees e ON e.id = lr.employee_id
-    WHERE e.department = ? AND lr.employee_id != ?
-      AND lr.leave_type = 'annual' AND lr.status = 'approved'
-      AND lr.start_date BETWEEN date(?, '-14 days') AND date(?, '+14 days')
-  `).all(department, employeeId, startDate, startDate);
+
+  const isSales = SALES_DEPTS.includes((department || '').toLowerCase());
+  let nearby;
+
+  if (isSales && productCategory) {
+    nearby = db.prepare(`
+      SELECT lr.start_date, e.full_name
+      FROM leave_requests lr
+      JOIN employees e ON e.id = lr.employee_id
+      WHERE e.product_category = ? AND lr.employee_id != ?
+        AND lr.leave_type = 'annual' AND lr.status = 'approved'
+        AND lr.start_date BETWEEN date(?, '-14 days') AND date(?, '+14 days')
+    `).all(productCategory, employeeId, startDate, startDate);
+  } else {
+    nearby = db.prepare(`
+      SELECT lr.start_date, e.full_name
+      FROM leave_requests lr
+      JOIN employees e ON e.id = lr.employee_id
+      WHERE e.department = ? AND lr.employee_id != ?
+        AND lr.leave_type = 'annual' AND lr.status = 'approved'
+        AND lr.start_date BETWEEN date(?, '-14 days') AND date(?, '+14 days')
+    `).all(department, employeeId, startDate, startDate);
+  }
 
   for (const row of nearby) {
     const gap = Math.abs(dayjs(startDate).diff(dayjs(row.start_date), 'day'));
@@ -290,9 +307,9 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
   const blackout = checkBlackout(employee.department, startDate, endDate || startDate);
   if (blackout.blocked) errors.push(blackout.reason);
 
-  // 4. Department gap (annual only)
-  if (!overlap.hasOverlap) {
-    const deptGap = checkDepartmentGap(employee.id, employee.department, startDate, leaveType);
+  // 4. Department gap (annual only; emergency skips this check)
+  if (!overlap.hasOverlap && leaveType !== 'emergency') {
+    const deptGap = checkDepartmentGap(employee.id, employee.department, startDate, leaveType, employee.product_category);
     if (deptGap.blocked) errors.push(deptGap.reason);
   }
 
@@ -342,7 +359,15 @@ function validateLeaveRequest({ employee, leaveType, startDate, endDate, hours, 
   // 10. Balance & pay classification
   let paid = 0, halfPay = 0, unpaid = 0;
 
-  if (leaveType === 'unpaid') {
+  if (leaveType === 'emergency') {
+    // ── Emergency leave: max 3 days, fully paid ──
+    if (totalDays > 3) {
+      errors.push('Emergency leave is limited to a maximum of 3 days.');
+    }
+    paid = Math.min(totalDays, 3);
+    warnings.push('Emergency leave requires manager approval. Your manager will be notified immediately.');
+
+  } else if (leaveType === 'unpaid') {
     // ── Explicit unpaid leave: ALWAYS 100% unpaid, never reclassified as paid ──
     paid = 0; halfPay = 0; unpaid = totalDays;
 
@@ -558,6 +583,7 @@ module.exports = {
   checkEligibility,
   checkBlackout,
   checkOverlap,
+  checkDepartmentGap,
   calculateGratuity,
   getBasicSalaryPercentage,
   checkNoSickLeaveBonus,
@@ -569,4 +595,5 @@ module.exports = {
   checkPersonalTimeBalance,
   getCompassionateAllowance,
   COMPASSIONATE_DAYS,
+  SALES_DEPTS,
 };

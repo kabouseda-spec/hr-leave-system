@@ -22,7 +22,7 @@ router.get('/', auth, rbac('hr_admin', 'manager'), (req, res) => {
   let where = req.user.role === 'manager' ? `WHERE e.manager_id = '${req.user.id}'` : 'WHERE e.is_active = 1';
   const rows = db.prepare(`
     SELECT e.id, e.employee_number, e.full_name, e.email, e.role, e.department,
-           e.hire_date, e.rollover_month, e.probation_end_date, e.is_active,
+           e.product_category, e.hire_date, e.rollover_month, e.probation_end_date, e.is_active,
            e.basic_salary, e.passport_number, e.passport_expiry,
            e.visa_number, e.visa_type, e.visa_expiry, e.visa_country,
            m.full_name AS manager_name
@@ -38,7 +38,7 @@ router.get('/', auth, rbac('hr_admin', 'manager'), (req, res) => {
 router.post('/', auth, rbac('hr_admin'), (req, res) => {
   const {
     employee_number, full_name, email, password, role,
-    department, manager_id, hire_date, probation_end_date, basic_salary, hra, other_allowance,
+    department, product_category, manager_id, hire_date, probation_end_date, basic_salary, hra, other_allowance,
     passport_number, passport_expiry, visa_number, visa_type, visa_expiry, visa_country,
     date_of_birth, spouse_name, spouse_dob, spouse_in_uae, marriage_anniversary,
   } = req.body;
@@ -54,13 +54,13 @@ router.post('/', auth, rbac('hr_admin'), (req, res) => {
   try {
     db.prepare(`
       INSERT INTO employees
-      (id,employee_number,full_name,email,password_hash,role,department,manager_id,
+      (id,employee_number,full_name,email,password_hash,role,department,product_category,manager_id,
        hire_date,rollover_month,probation_end_date,basic_salary,hra,other_allowance,
        passport_number,passport_expiry,visa_number,visa_type,visa_expiry,visa_country,
        date_of_birth,spouse_name,spouse_dob,marriage_anniversary)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(id, employee_number, full_name, email.toLowerCase(), hash, role,
-           department, n(manager_id), hire_date, rollover_month,
+           department, n(product_category), n(manager_id), hire_date, rollover_month,
            n(probation_end_date), basic_salary || 0, hra || 0, other_allowance || 0,
            n(passport_number), n(passport_expiry),
            n(visa_number), n(visa_type), n(visa_expiry), visa_country || 'UAE',
@@ -112,7 +112,7 @@ router.get('/:id', auth, (req, res) => {
 // Update employee
 router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
   const {
-    full_name, role, department, manager_id, hire_date, probation_end_date,
+    full_name, role, department, product_category, manager_id, hire_date, probation_end_date,
     basic_salary, hra, other_allowance, is_active, passport_number, passport_expiry,
     visa_number, visa_type, visa_expiry, visa_country, visa_issuing_company, end_of_service_date,
     labor_card_number, labor_card_expiry,
@@ -132,6 +132,7 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     full_name = COALESCE(?, full_name),
     role = COALESCE(?, role),
     department = COALESCE(?, department),
+    product_category = COALESCE(?, product_category),
     manager_id = COALESCE(?, manager_id),
     hire_date = COALESCE(?, hire_date),
     rollover_month = ?,
@@ -161,7 +162,7 @@ router.patch('/:id', auth, rbac('hr_admin'), (req, res) => {
     marriage_anniversary = COALESCE(?, marriage_anniversary),
     updated_at = datetime('now')
     WHERE id = ?`).run(
-    n(full_name), n(role), n(department), n(manager_id), n(hire_date), rollover_month,
+    n(full_name), n(role), n(department), n(product_category), n(manager_id), n(hire_date), rollover_month,
     n(probation_end_date), n(basic_salary), n(hra), n(other_allowance), effectiveIsActive,
     n(passport_number), n(passport_expiry), n(visa_number), n(visa_type), n(visa_expiry), n(visa_country), n(visa_issuing_company),
     n(labor_card_number), n(labor_card_expiry),

@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const engine = require('./services/leaveEngine');
-const { runReminders } = require('./services/reminderEngine');
+const { runReminders, checkAnnualLeaveExpiries, checkLeavesToday } = require('./services/reminderEngine');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -20,6 +20,7 @@ app.use('/api/personal-time',         require('./routes/personalTime'));
 app.use('/api/reports',               require('./routes/reports'));
 app.use('/api/admin',                 require('./routes/admin'));
 app.use('/api/comp-days',             require('./routes/compDays'));
+app.use('/api/rollover-approvals',    require('./routes/rolloverApprovals'));
 
 app.get('/api/health', (_, res) => {
   try {
@@ -87,6 +88,8 @@ app.listen(PORT, () => {
   const runAllReminders = () => {
     try { engine.checkVisaReminders(); } catch(e) {}
     try { runReminders(); } catch(e) {}
+    try { checkAnnualLeaveExpiries(); } catch(e) {}
+    try { checkLeavesToday(); } catch(e) {}
   };
   runAllReminders();
   setInterval(runAllReminders, 24 * 60 * 60 * 1000);

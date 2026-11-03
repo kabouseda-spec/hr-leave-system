@@ -38,12 +38,14 @@ function getRecipients(employee) {
 }
 
 function notify(recipientId, message, type, eventDate = null) {
-  // Avoid duplicate notifications on same day for the same event
+  // Dedup: same recipient + same message + same day prevents double-firing.
+  // Using message (not just type+event_date) so two employees sharing a birthday
+  // both get their own notification for each manager/HR recipient.
   const existing = db.prepare(`
     SELECT id FROM notifications
     WHERE employee_id = ? AND type = ? AND date(created_at) = date('now')
-      AND (event_date = ? OR (event_date IS NULL AND message = ?))
-  `).get(recipientId, type, eventDate, message);
+      AND message = ?
+  `).get(recipientId, type, message);
   if (existing) return;
 
   db.prepare('INSERT INTO notifications (id, employee_id, message, type, event_date) VALUES (?, ?, ?, ?, ?)')
@@ -143,4 +145,83 @@ function runReminders() {
   return sent;
 }
 
-module.exports = { runReminders };
+// ── Annual leave period expiry — unused days rollover notification ────────────
+// Runs once a day. When an employee's annual leave period ends today and they
+// have remaining days, creates a leave_rollover_approvals record and notifies
+// the owner + all HR admins.
+function checkAnnualLeaveExpiries() {
+  const today = dayjs();
+  const todayStr = today.format('YYYY-MM-DD');
+
+  // Find annual leave balances whose period ends today or has just ended (within 3 days)
+  const expiring = db.prepare(`
+    SELECT lb.*, e.full_name, e.hire_date
+    FROM leave_balances lb
+    JOIN employees e ON e.id = lb.employee_id
+    WHERE lb.leave_type = 'annual'
+      AND lb.period_end IS NOT NULL
+      AND lb.period_end BETWEEN date(?, '-3 days') AND ?
+      AND e.is_active = 1
+  `).all(todayStr, todayStr);
+
+  for (const bal of expiring) {
+    const remaining = (bal.allocated || 0) + (bal.bonus_days || 0)
+                    - (bal.used_paid || 0) - (bal.used_half || 0) - (bal.used_unpaid || 0)
+                    - (bal.pending || 0);
+    if (remaining <= 0) continue;
+
+    // Insert rollover approval request (UNIQUE constraint prevents duplicates)
+    try {
+      db.prepare(`INSERT INTO leave_rollover_approvals (id, employee_id, leave_year, remaining_days)
+        VALUES (?, ?, ?, ?)`).run(uuidv4(), bal.employee_id, bal.year, remaining);
+    } catch(e) { /* already exists — skip */ continue; }
+
+    // Notify owners + HR admins
+    const targets = db.prepare(`
+      SELECT id FROM employees WHERE (is_owner = 1 OR role = 'hr_admin') AND is_active = 1
+    `).all();
+    for (const t of targets) {
+      notify(t.id,
+        `📋 Annual leave expiry: ${bal.full_name} has ${remaining.toFixed(1)} unused day(s) from the ${bal.year} period (ended ${bal.period_end}). Owner approval required to roll over.`,
+        'annual_leave_expiry', todayStr);
+    }
+  }
+}
+
+// ── Notify manager when an employee's approved leave starts today ─────────────
+function checkLeavesToday() {
+  const todayStr = dayjs().format('YYYY-MM-DD');
+  const { sendEmail, leaveStartedEmail } = require('./emailService');
+
+  const leavesStartingToday = db.prepare(`
+    SELECT lr.*, e.full_name, e.department, e.manager_id
+    FROM leave_requests lr
+    JOIN employees e ON e.id = lr.employee_id
+    WHERE lr.status = 'approved'
+      AND lr.start_date = ?
+      AND e.is_active = 1
+  `).all(todayStr);
+
+  for (const leave of leavesStartingToday) {
+    if (!leave.manager_id) continue;
+
+    const notifMsg = `🏖️ ${leave.full_name} is on ${leave.leave_type} leave today (${leave.start_date}${leave.end_date !== leave.start_date ? ' – ' + leave.end_date : ''}, ${leave.total_days} day(s)).`;
+    notify(leave.manager_id, notifMsg, 'employee_on_leave', todayStr);
+
+    // Email the manager
+    const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(leave.manager_id);
+    if (manager?.email) {
+      const tpl = leaveStartedEmail({
+        managerName: manager.full_name,
+        employeeName: leave.full_name,
+        leaveType: leave.leave_type,
+        startDate: leave.start_date,
+        endDate: leave.end_date,
+        totalDays: leave.total_days,
+      });
+      sendEmail({ to: manager.email, ...tpl });
+    }
+  }
+}
+
+module.exports = { runReminders, checkAnnualLeaveExpiries, checkLeavesToday };

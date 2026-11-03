@@ -16,17 +16,19 @@ function getTransporter() {
 async function sendEmail({ to, subject, html }) {
   const transporter = getTransporter();
   if (!transporter) {
-    console.log(`[Email] Not configured — would have sent to ${to}: ${subject}`);
+    console.log(`[Wendy] Not configured — would have sent to ${to}: ${subject}`);
     return;
   }
   try {
+    const fromName = process.env.EMAIL_FROM_NAME || 'Wendy';
+    const fromAddr = process.env.EMAIL_FROM || process.env.SMTP_USER;
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+      from: `"${fromName}" <${fromAddr}>`,
       to, subject, html,
     });
-    console.log(`[Email] Sent to ${to}: ${subject}`);
+    console.log(`[Wendy] Sent to ${to}: ${subject}`);
   } catch(e) {
-    console.error(`[Email] Failed to send to ${to}:`, e.message);
+    console.error(`[Wendy] Failed to send to ${to}:`, e.message);
   }
 }
 
@@ -119,4 +121,29 @@ function leaveRejectedEmail({ employeeName, leaveType, startDate, endDate, rejec
   };
 }
 
-module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail };
+function leaveStartedEmail({ managerName, employeeName, leaveType, startDate, endDate, totalDays }) {
+  const rangeLabel = endDate !== startDate ? `${startDate} to ${endDate}` : startDate;
+  return {
+    subject: `🏖️ ${employeeName} is on leave today`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="background:#1e40af;padding:20px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">🗓️ HR Leave System</h1>
+          <p style="color:#bfdbfe;margin:4px 0 0">Kinetics Group</p>
+        </div>
+        <div style="background:#fffbeb;padding:24px;border:1px solid #fcd34d;border-top:none;border-radius:0 0 8px 8px">
+          <p style="color:#374151">Hi <strong>${managerName}</strong>,</p>
+          <p style="color:#374151">This is a reminder that <strong>${employeeName}</strong> is on approved leave today:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#fffbeb"><td style="padding:10px 16px;color:#6b7280;width:40%">Leave Type</td><td style="padding:10px 16px;font-weight:600;text-transform:capitalize">${leaveType}</td></tr>
+            <tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Date(s)</td><td style="padding:10px 16px;font-weight:600;border-top:1px solid #f3f4f6">${rangeLabel}</td></tr>
+            <tr style="background:#fffbeb"><td style="padding:10px 16px;color:#6b7280">Duration</td><td style="padding:10px 16px;font-weight:600">${totalDays} day(s)</td></tr>
+          </table>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Kinetics Group HR Leave System · sent by Wendy</p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveStartedEmail };

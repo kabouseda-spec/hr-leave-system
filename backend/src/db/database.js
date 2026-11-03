@@ -65,6 +65,21 @@ const migrations = [
   "ALTER TABLE notifications ADD COLUMN event_date TEXT",
   // family member UAE flag
   "ALTER TABLE family_members ADD COLUMN in_uae INTEGER DEFAULT 1",
+  // product_category for sales-team segregation (IPG, EPG, SAPG)
+  "ALTER TABLE employees ADD COLUMN product_category TEXT",
+  // leave rollover approval requests (owner must approve to carry days forward)
+  `CREATE TABLE IF NOT EXISTS leave_rollover_approvals (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    leave_year INTEGER NOT NULL,
+    remaining_days REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_by TEXT REFERENCES employees(id),
+    approved_at TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(employee_id, leave_year)
+  )`,
   // compensatory days granted by admin
   `CREATE TABLE IF NOT EXISTS comp_days (
     id TEXT PRIMARY KEY,
@@ -164,6 +179,11 @@ const newPolicies = [
     blackout_start: null, blackout_end: null, is_active: 1 },
   { leave_type: 'comp', label: 'Compensatory Off', unit: 'days',
     eligibility_months: 0, annual_allowance: 0, full_pay_days: 999,
+    half_pay_days: 0, unpaid_days: 0, allow_negative: 0,
+    requires_certificate: 0, certificate_after_days: 0, rollover_days: 0,
+    blackout_start: null, blackout_end: null, is_active: 1 },
+  { leave_type: 'emergency', label: 'Emergency Leave', unit: 'days',
+    eligibility_months: 0, annual_allowance: 3, full_pay_days: 3,
     half_pay_days: 0, unpaid_days: 0, allow_negative: 0,
     requires_certificate: 0, certificate_after_days: 0, rollover_days: 0,
     blackout_start: null, blackout_end: null, is_active: 1 },

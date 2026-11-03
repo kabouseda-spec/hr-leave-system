@@ -51,7 +51,7 @@ function visaStatus(visa_expiry?: string) {
 
 const BLANK_FORM = {
   employee_number: '', full_name: '', email: '', password: '',
-  role: 'employee', department: '',
+  role: 'employee', department: '', product_category: '',
   hire_date: dayjs().format('YYYY-MM-DD'),
   probation_end_date: dayjs().add(6, 'month').format('YYYY-MM-DD'),
   basic_salary: '', hra: '', other_allowance: '', manager_id: '',
@@ -236,7 +236,7 @@ export default function AdminEmployees() {
       const { data: full } = await api.get(`/employees/${emp.id}`);
       setForm({
         employee_number: full.employee_number, full_name: full.full_name,
-        email: full.email, password: '', role: full.role, department: full.department,
+        email: full.email, password: '', role: full.role, department: full.department, product_category: full.product_category || '',
         hire_date: full.hire_date, probation_end_date: full.probation_end_date || '',
         basic_salary: String(full.basic_salary || 0), hra: String(full.hra || 0), other_allowance: String(full.other_allowance || 0), manager_id: full.manager_id || '',
         passport_number: full.passport_number || '', passport_expiry: full.passport_expiry || '',
@@ -629,6 +629,21 @@ export default function AdminEmployees() {
                         </div>
                       )}
                     </div>
+                    {/* Product category — only relevant for Sales / Sales Admin */}
+                    {['Sales', 'Sales Admin'].includes(form.department) && (
+                      <div>
+                        <label className="label">Product Category</label>
+                        <select className="input" value={form.product_category}
+                          onChange={e => setForm(f => ({ ...f, product_category: e.target.value }))}>
+                          <option value="">— None —</option>
+                          <option value="IPG">IPG</option>
+                          <option value="EPG">EPG</option>
+                          <option value="SAPG">SAPG</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">Leave coverage is checked within the same product category.</p>
+                      </div>
+                    )}
+
                     <div>
                       <label className="label">Hire Date</label>
                       <input type="date" className="input" value={form.hire_date} onChange={e => setForm(f => ({
@@ -952,7 +967,7 @@ export default function AdminEmployees() {
                               onChange={e => setAddLeaveForm(f => ({ ...f, leave_type: e.target.value, sub_type: '' }))}>
                               {[['annual','Annual'],['sick','Sick'],['personal','Personal Time'],['maternity','Maternity'],
                                 ['parental','Parental'],['compassionate','Compassionate'],
-                                ['study','Study'],['unpaid','Unpaid']].map(([v,l]) =>
+                                ['study','Study'],['unpaid','Unpaid'],['emergency','Emergency']].map(([v,l]) =>
                                 <option key={v} value={v}>{l}</option>)}
                             </select>
                           </div>
@@ -1066,7 +1081,7 @@ export default function AdminEmployees() {
                                 onChange={e => setEditLeaveForm((f: any) => ({ ...f, leave_type: e.target.value }))}>
                                 {[['annual','Annual'],['sick','Sick'],['personal','Personal Time'],['maternity','Maternity'],
                                   ['parental','Parental'],['compassionate','Compassionate'],
-                                  ['study','Study'],['unpaid','Unpaid']].map(([v,l]) =>
+                                  ['study','Study'],['unpaid','Unpaid'],['emergency','Emergency']].map(([v,l]) =>
                                   <option key={v} value={v}>{l}</option>)}
                               </select>
                             </div>

@@ -233,6 +233,18 @@ function LeaveCard({ b, rollover, onClick }: { b: Balance; rollover?: Rollover; 
   );
 }
 
+interface RolloverApproval {
+  id: string;
+  employee_id: string;
+  full_name: string;
+  department: string;
+  employee_number: string;
+  leave_year: number;
+  remaining_days: number;
+  status: string;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -246,6 +258,31 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [holidays, setHolidays] = useState<any[]>([]);
   const [hireDate, setHireDate] = useState<string | null>(null);
+  const [rolloverApprovals, setRolloverApprovals] = useState<RolloverApproval[]>([]);
+  const [rolloverAction, setRolloverAction] = useState<string | null>(null);
+
+  const isOwnerOrHR = (user as any)?.is_owner || user?.role === 'hr_admin';
+
+  const fetchRollovers = () => {
+    if (!isOwnerOrHR) return;
+    api.get('/rollover-approvals').then(r => {
+      setRolloverApprovals((r.data || []).filter((x: RolloverApproval) => x.status === 'pending'));
+    }).catch(() => {});
+  };
+
+  const handleRollover = async (id: string, action: 'approve' | 'reject') => {
+    setRolloverAction(id + action);
+    try {
+      await api.patch(`/rollover-approvals/${id}/${action}`);
+      fetchRollovers();
+    } finally {
+      setRolloverAction(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchRollovers();
+  }, [isOwnerOrHR]);
 
   useEffect(() => {
     Promise.allSettled([
@@ -325,12 +362,13 @@ export default function Dashboard() {
           <div className={`space-y-2 ${notifications.length > 4 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
             {notifications.map((n: any) => {
               const dest =
-                n.type === 'leave_request'  ? '/leave/approvals' :
-                n.type === 'leave_approved' ? '/leave/history'   :
-                n.type === 'leave_rejected' ? '/leave/history'   :
-                n.type === 'personal_time'  ? '/personal-time'   :
-                n.type === 'comp_day'       ? '/leave/history'   :
-                n.type?.includes('visa')    ? '/admin/employees' :
+                n.type === 'leave_request'    ? '/leave/approvals' :
+                n.type === 'leave_approved'   ? '/leave/history'   :
+                n.type === 'leave_rejected'   ? '/leave/history'   :
+                n.type === 'personal_time'    ? '/personal-time'   :
+                n.type === 'comp_day'         ? '/leave/history'   :
+                n.type === 'rollover_approved'|| n.type === 'rollover_rejected' ? '/leave/history' :
+                n.type?.includes('visa')      ? '/admin/employees' :
                 null;
               const colorCls =
                 n.type?.includes('visa')     ? 'bg-orange-50 border-orange-200 text-orange-800' :
@@ -495,6 +533,42 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
                     {dayjs(h.date).diff(dayjs(), 'day')} days away
                   </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rollover approvals — owner / HR admin only */}
+        {isOwnerOrHR && rolloverApprovals.length > 0 && (
+          <div>
+            <h2 className="text-base font-semibold text-gray-700 mb-3">🔄 Pending Leave Rollover Requests</h2>
+            <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+              {rolloverApprovals.map(ra => (
+                <div key={ra.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-amber-50 last:border-0 hover:bg-amber-50/40 transition-colors">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{ra.full_name}</p>
+                    <p className="text-xs text-gray-500">{ra.department} · #{ra.employee_number}</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      <strong>{ra.remaining_days}</strong> unused annual leave day{ra.remaining_days !== 1 ? 's' : ''} from {ra.leave_year}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      disabled={rolloverAction !== null}
+                      onClick={() => handleRollover(ra.id, 'approve')}
+                      className="px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {rolloverAction === ra.id + 'approve' ? '…' : 'Approve Rollover'}
+                    </button>
+                    <button
+                      disabled={rolloverAction !== null}
+                      onClick={() => handleRollover(ra.id, 'reject')}
+                      className="px-3 py-1.5 text-xs font-medium bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {rolloverAction === ra.id + 'reject' ? '…' : 'Reject'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
