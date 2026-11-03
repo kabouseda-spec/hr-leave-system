@@ -6,6 +6,7 @@ const db = require('../db/database');
 const auth = require('../middleware/auth');
 const rbac = require('../middleware/rbac');
 const { getPersonalTimePeriod } = require('../services/leaveEngine');
+const { sendEmail, personalTimeEmail } = require('../services/emailService');
 
 const n = v => (v === undefined ? null : v);
 
@@ -60,6 +61,26 @@ router.post('/', auth, (req, res) => {
 
   db.prepare('UPDATE personal_time_balances SET used=?, deducted=? WHERE employee_id=? AND period=?')
     .run(newUsed, isDeducted, emp.id, period);
+
+  // Email manager (To) + CC owner and HR — all from DB
+  if (emp.manager_id) {
+    const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(emp.manager_id);
+    if (manager?.email) {
+      const ccRows = db.prepare(`
+        SELECT email FROM employees
+        WHERE is_active=1 AND email != ? AND (is_owner=1 OR role='hr_admin')
+      `).all(manager.email);
+      const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
+      sendEmail({ to: manager.email, cc, ...personalTimeEmail({
+        managerName: manager.full_name,
+        employeeName: emp.full_name,
+        hours: hrs,
+        logDate: log_date,
+        reason: reason || '',
+        willExceedLimit: isDeducted === 1,
+      })});
+    }
+  }
 
   res.status(201).json({
     id,

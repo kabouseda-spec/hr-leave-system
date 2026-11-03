@@ -10,7 +10,7 @@ const rbac = require('../middleware/rbac');
 const engine = require('../services/leaveEngine');
 
 const n = v => (v === undefined ? null : v);
-const { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveApprovedNotifyEmail } = require('../services/emailService');
+const { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveApprovedNotifyEmail, leaveCancelledEmail } = require('../services/emailService');
 
 // ── File upload (medical certificates) ───────────────────────────────────────
 const storage = multer.diskStorage({
@@ -317,8 +317,8 @@ router.patch('/:id/reject', auth, rbac('manager', 'hr_admin'), (req, res) => {
     .run(uuidv4(), row.employee_id,
         `❌ Your ${row.leave_type} leave (${row.start_date} – ${row.end_date}) was rejected.${rejection_reason ? ' Reason: ' + rejection_reason : ''}`, 'leave_rejected');
 
-  // Email the employee
-  const empReject = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(row.employee_id);
+  // Email the employee; CC manager + owner + HR
+  const empReject = db.prepare('SELECT full_name, email, manager_id FROM employees WHERE id=?').get(row.employee_id);
   const rejector  = db.prepare('SELECT full_name FROM employees WHERE id=?').get(req.user.id);
   if (empReject?.email) {
     const tpl = leaveRejectedEmail({
@@ -329,7 +329,14 @@ router.patch('/:id/reject', auth, rbac('manager', 'hr_admin'), (req, res) => {
       rejectionReason: rejection_reason || '',
       rejectedByName: rejector?.full_name || 'Your Manager',
     });
-    sendEmail({ to: empReject.email, ...tpl });
+    // Build CC: manager + owner + HR (excluding the employee themselves)
+    const ccRows = db.prepare(`
+      SELECT email FROM employees
+      WHERE is_active=1 AND email != ?
+        AND (id = ? OR is_owner = 1 OR role = 'hr_admin')
+    `).all(empReject.email, empReject.manager_id || '');
+    const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
+    sendEmail({ to: empReject.email, cc, ...tpl });
   }
 
   res.json({ message: 'Rejected' });
@@ -359,6 +366,33 @@ router.patch('/:id/cancel', auth, (req, res) => {
       WHERE employee_id=? AND leave_type=? AND year=?`)
       .run(row.total_days, row.employee_id, row.leave_type, rollover.year);
   }
+
+  // Notify employee in-app
+  const empCancel = db.prepare('SELECT full_name, email, manager_id FROM employees WHERE id=?').get(row.employee_id);
+  db.prepare('INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)')
+    .run(uuidv4(), row.employee_id,
+        `🚫 Your ${row.leave_type} leave (${row.start_date} – ${row.end_date}) has been cancelled.`, 'leave_cancelled');
+
+  // Email manager (To) + CC owner + HR
+  if (empCancel?.manager_id) {
+    const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(empCancel.manager_id);
+    if (manager?.email) {
+      const ccRows = db.prepare(`
+        SELECT email FROM employees
+        WHERE is_active=1 AND email != ? AND (is_owner=1 OR role='hr_admin')
+      `).all(manager.email);
+      const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
+      sendEmail({ to: manager.email, cc, ...leaveCancelledEmail({
+        recipientName: manager.full_name,
+        employeeName: empCancel.full_name,
+        leaveType: row.leave_type,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        totalDays: row.total_days,
+      })});
+    }
+  }
+
   res.json({ message: 'Cancelled' });
 });
 

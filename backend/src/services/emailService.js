@@ -147,6 +147,57 @@ function leaveStartedEmail({ managerName, employeeName, leaveType, startDate, en
   };
 }
 
+function personalTimeEmail({ managerName, employeeName, hours, logDate, reason, willExceedLimit }) {
+  return {
+    subject: `⏱️ Personal Time Logged — ${employeeName} (${hours}h on ${logDate})`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="background:#1e40af;padding:20px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">🗓️ HR Leave System</h1>
+          <p style="color:#bfdbfe;margin:4px 0 0">Kinetics Group</p>
+        </div>
+        <div style="background:#fefce8;padding:24px;border:1px solid #fde047;border-top:none;border-radius:0 0 8px 8px">
+          <p style="color:#374151">Hi <strong>${managerName}</strong>,</p>
+          <p style="color:#374151"><strong>${employeeName}</strong> has logged personal time today:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#fefce8"><td style="padding:10px 16px;color:#6b7280;width:40%">Date</td><td style="padding:10px 16px;font-weight:600">${logDate}</td></tr>
+            <tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Hours Used</td><td style="padding:10px 16px;font-weight:600;border-top:1px solid #f3f4f6">${hours}h</td></tr>
+            ${reason ? `<tr style="background:#fefce8"><td style="padding:10px 16px;color:#6b7280">Reason</td><td style="padding:10px 16px;border-top:1px solid #f3f4f6">${reason}</td></tr>` : ''}
+            ${willExceedLimit ? `<tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Note</td><td style="padding:10px 16px;font-weight:600;color:#b45309;border-top:1px solid #f3f4f6">⚠️ Exceeds 6h period limit — excess will be deducted from payroll</td></tr>` : ''}
+          </table>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Kinetics Group HR Leave System · sent by Wendy</p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+function leaveCancelledEmail({ recipientName, employeeName, leaveType, startDate, endDate, totalDays }) {
+  const rangeLabel = endDate !== startDate ? `${startDate} to ${endDate}` : startDate;
+  return {
+    subject: `🔄 Leave Cancelled — ${employeeName} (${leaveType}, ${rangeLabel})`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="background:#1e40af;padding:20px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">🗓️ HR Leave System</h1>
+          <p style="color:#bfdbfe;margin:4px 0 0">Kinetics Group</p>
+        </div>
+        <div style="background:#f8fafc;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">
+          <p style="color:#374151">Hi <strong>${recipientName}</strong>,</p>
+          <p style="color:#374151"><strong>${employeeName}</strong> has cancelled a previously approved leave:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#f8fafc"><td style="padding:10px 16px;color:#6b7280;width:40%">Leave Type</td><td style="padding:10px 16px;font-weight:600;text-transform:capitalize">${leaveType}</td></tr>
+            <tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Date(s)</td><td style="padding:10px 16px;font-weight:600;border-top:1px solid #f3f4f6">${rangeLabel}</td></tr>
+            <tr style="background:#f8fafc"><td style="padding:10px 16px;color:#6b7280">Duration</td><td style="padding:10px 16px;font-weight:600">${totalDays} day(s)</td></tr>
+          </table>
+          <p style="color:#374151">Their leave balance has been restored.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Kinetics Group HR Leave System · sent by Wendy</p>
+        </div>
+      </div>
+    `,
+  };
+}
+
 function leaveApprovedNotifyEmail({ recipientName, employeeName, leaveType, startDate, endDate, totalDays, approvedByName }) {
   const rangeLabel = endDate !== startDate ? `${startDate} to ${endDate}` : startDate;
   return {
@@ -173,4 +224,4 @@ function leaveApprovedNotifyEmail({ recipientName, employeeName, leaveType, star
   };
 }
 
-module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveStartedEmail, leaveApprovedNotifyEmail };
+module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveStartedEmail, leaveApprovedNotifyEmail, personalTimeEmail, leaveCancelledEmail };
