@@ -188,7 +188,7 @@ function checkAnnualLeaveExpiries() {
   }
 }
 
-// ── Notify manager when an employee's approved leave starts today ─────────────
+// ── Notify manager + owner + HR when an employee's approved leave starts today ──
 function checkLeavesToday() {
   const todayStr = dayjs().format('YYYY-MM-DD');
   const { sendEmail, leaveStartedEmail } = require('./emailService');
@@ -208,9 +208,53 @@ function checkLeavesToday() {
     const notifMsg = `🏖️ ${leave.full_name} is on ${leave.leave_type} leave today (${leave.start_date}${leave.end_date !== leave.start_date ? ' – ' + leave.end_date : ''}, ${leave.total_days} day(s)).`;
     notify(leave.manager_id, notifMsg, 'employee_on_leave', todayStr);
 
-    // Email the manager
     const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(leave.manager_id);
     if (manager?.email) {
+      const ccRows = db.prepare(`
+        SELECT email FROM employees
+        WHERE is_active = 1 AND email != ? AND (is_owner = 1 OR role = 'hr_admin')
+      `).all(manager.email);
+      const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
+      sendEmail({ to: manager.email, cc, ...leaveStartedEmail({
+        managerName: manager.full_name,
+        employeeName: leave.full_name,
+        leaveType: leave.leave_type,
+        startDate: leave.start_date,
+        endDate: leave.end_date,
+        totalDays: leave.total_days,
+      })});
+    }
+  }
+}
+
+// ── 7-day advance reminder: email manager + CC owner + HR ────────────────────
+function checkLeavesNextWeek() {
+  const targetDate = dayjs().add(7, 'day').format('YYYY-MM-DD');
+  const { sendEmail, leaveStartedEmail } = require('./emailService');
+
+  const leavesNextWeek = db.prepare(`
+    SELECT lr.*, e.full_name, e.department, e.manager_id
+    FROM leave_requests lr
+    JOIN employees e ON e.id = lr.employee_id
+    WHERE lr.status = 'approved'
+      AND lr.start_date = ?
+      AND e.is_active = 1
+  `).all(targetDate);
+
+  for (const leave of leavesNextWeek) {
+    if (!leave.manager_id) continue;
+
+    // In-app notification
+    const notifMsg = `📅 Upcoming: ${leave.full_name} starts ${leave.leave_type} leave in 7 days (${leave.start_date}–${leave.end_date}, ${leave.total_days} day(s)).`;
+    notify(leave.manager_id, notifMsg, 'leave_reminder_7d', targetDate);
+
+    const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(leave.manager_id);
+    if (manager?.email) {
+      const ccRows = db.prepare(`
+        SELECT email FROM employees
+        WHERE is_active = 1 AND email != ? AND (is_owner = 1 OR role = 'hr_admin')
+      `).all(manager.email);
+      const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
       const tpl = leaveStartedEmail({
         managerName: manager.full_name,
         employeeName: leave.full_name,
@@ -219,9 +263,10 @@ function checkLeavesToday() {
         endDate: leave.end_date,
         totalDays: leave.total_days,
       });
-      sendEmail({ to: manager.email, ...tpl });
+      // Override subject to make clear this is a 7-day advance reminder
+      sendEmail({ to: manager.email, cc, ...tpl, subject: `📅 7-Day Reminder — ${leave.full_name} on leave ${leave.start_date}` });
     }
   }
 }
 
-module.exports = { runReminders, checkAnnualLeaveExpiries, checkLeavesToday };
+module.exports = { runReminders, checkAnnualLeaveExpiries, checkLeavesToday, checkLeavesNextWeek };

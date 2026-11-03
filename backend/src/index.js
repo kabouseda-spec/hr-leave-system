@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const engine = require('./services/leaveEngine');
-const { runReminders, checkAnnualLeaveExpiries, checkLeavesToday } = require('./services/reminderEngine');
+const { runReminders, checkAnnualLeaveExpiries, checkLeavesToday, checkLeavesNextWeek } = require('./services/reminderEngine');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -90,6 +90,7 @@ app.listen(PORT, () => {
     try { runReminders(); } catch(e) {}
     try { checkAnnualLeaveExpiries(); } catch(e) {}
     try { checkLeavesToday(); } catch(e) {}
+    try { checkLeavesNextWeek(); } catch(e) {}
   };
   runAllReminders();
   setInterval(runAllReminders, 24 * 60 * 60 * 1000);

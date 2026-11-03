@@ -137,10 +137,15 @@ router.post('/', auth, (req, res) => {
       .run(uuidv4(), employee.manager_id,
           `📋 ${employee.full_name} requested ${leave_type} leave from ${start_date} to ${end}.`, 'leave_request');
 
-    // Email the manager
+    // Email the manager (To) + CC owner and HR admins — all resolved from DB
     const manager = db.prepare('SELECT full_name, email FROM employees WHERE id=?').get(employee.manager_id);
     if (manager?.email) {
-      const tpl = leaveRequestEmail({
+      const ccRows = db.prepare(`
+        SELECT email FROM employees
+        WHERE is_active = 1 AND email != ? AND (is_owner = 1 OR role = 'hr_admin')
+      `).all(manager.email);
+      const cc = ccRows.map(r => r.email).filter(Boolean).join(', ') || undefined;
+      sendEmail({ to: manager.email, cc, ...leaveRequestEmail({
         managerName: manager.full_name,
         employeeName: employee.full_name,
         leaveType: leave_type,
@@ -148,8 +153,7 @@ router.post('/', auth, (req, res) => {
         endDate: end,
         totalDays: result.totalDays,
         reason: reason || '',
-      });
-      sendEmail({ to: manager.email, ...tpl });
+      })});
     }
   }
 
