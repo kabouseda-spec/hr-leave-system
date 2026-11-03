@@ -261,8 +261,8 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
     })});
   }
 
-  // Notify the direct manager, all HR admins, and the owner — read from the DB
-  const notifyRecipients = db.prepare(`
+  // One CC email to: manager (To), HR admins + owner (CC) — all read from the DB
+  const ccRecipients = db.prepare(`
     SELECT full_name, email FROM employees
     WHERE is_active = 1
       AND email != ?
@@ -273,18 +273,20 @@ router.patch('/:id/approve', auth, rbac('manager', 'hr_admin'), (req, res) => {
       )
   `).all(row.employee_email || '', row.manager_id || '');
 
-  notifyRecipients.forEach(r => {
-    if (!r.email) return;
-    sendEmail({ to: r.email, ...leaveApprovedNotifyEmail({
-      recipientName: r.full_name,
+  if (ccRecipients.length > 0) {
+    const [primary, ...rest] = ccRecipients;
+    const ccList = rest.map(r => r.email).filter(Boolean).join(', ');
+    const tpl = leaveApprovedNotifyEmail({
+      recipientName: 'all',
       employeeName: row.employee_name,
       leaveType: row.leave_type,
       startDate: row.start_date,
       endDate: row.end_date,
       totalDays: row.total_days,
       approvedByName,
-    })});
-  });
+    });
+    sendEmail({ to: primary.email, cc: ccList || undefined, ...tpl });
+  }
 
   res.json({ message: 'Approved' });
 });

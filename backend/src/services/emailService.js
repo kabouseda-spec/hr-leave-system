@@ -14,7 +14,7 @@ function getTransporter() {
   });
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, cc, subject, html }) {
   const transporter = getTransporter();
   if (!transporter) {
     console.log(`[Wendy] Not configured — would have sent to ${to}: ${subject}`);
@@ -25,7 +25,7 @@ async function sendEmail({ to, subject, html }) {
     const fromAddr = process.env.EMAIL_FROM || process.env.SMTP_USER;
     await transporter.sendMail({
       from: `"${fromName}" <${fromAddr}>`,
-      to, subject, html,
+      to, ...(cc ? { cc } : {}), subject, html,
     });
     console.log(`[Wendy] Sent to ${to}: ${subject}`);
   } catch(e) {
