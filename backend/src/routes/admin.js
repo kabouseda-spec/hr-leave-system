@@ -178,49 +178,4 @@ router.get('/export/birthdays', auth, rbac('hr_admin'), (req, res) => {
   res.send(buf);
 });
 
-// ── POST /admin/force-visa-emails — one-shot, owner-only ─────────────────────
-// Force-sends visa expiry emails for all employees expiring within 90 days,
-// regardless of visa_reminder_sent_90 flag. Remove after use.
-router.post('/force-visa-emails', auth, rbac('hr_admin', 'manager'), (req, res) => {
-  const { sendEmail, visaExpiryEmail } = require('../services/emailService');
-  const today = dayjs();
-
-  const employees = db.prepare(`
-    SELECT * FROM employees
-    WHERE is_active = 1 AND visa_expiry IS NOT NULL
-  `).all();
-
-  const owner   = db.prepare("SELECT full_name, email FROM employees WHERE is_owner=1 AND is_active=1 LIMIT 1").get();
-  const hrAdmins = db.prepare("SELECT email FROM employees WHERE role='hr_admin' AND is_active=1").all();
-
-  const fired = [];
-
-  for (const emp of employees) {
-    const daysLeft = dayjs(emp.visa_expiry).diff(today, 'day');
-    if (daysLeft <= 0 || daysLeft > 90) continue;
-
-    if (owner?.email) {
-      const ccEmails = hrAdmins.map(h => h.email).filter(e => e && e !== owner.email);
-      const cc = ccEmails.length ? ccEmails.join(', ') : undefined;
-      sendEmail({
-        to: owner.email,
-        cc,
-        ...visaExpiryEmail({
-          recipientName: owner.full_name,
-          employeeName:  emp.full_name,
-          visaExpiry:    emp.visa_expiry,
-          daysLeft,
-          visaType:      emp.visa_type   || null,
-          visaNumber:    emp.visa_number || null,
-        }),
-      });
-      fired.push({ employee: emp.full_name, daysLeft, visaExpiry: emp.visa_expiry });
-    }
-
-    db.prepare("UPDATE employees SET visa_reminder_sent_90=1 WHERE id=?").run(emp.id);
-  }
-
-  res.json({ sent: fired.length, employees: fired });
-});
-
 module.exports = router;
