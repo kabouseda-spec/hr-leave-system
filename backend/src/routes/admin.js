@@ -181,7 +181,7 @@ router.get('/export/birthdays', auth, rbac('hr_admin'), (req, res) => {
 // ── POST /admin/force-visa-emails — one-shot, owner-only ─────────────────────
 // Force-sends visa expiry emails for all employees expiring within 90 days,
 // regardless of visa_reminder_sent_90 flag. Remove after use.
-router.post('/force-visa-emails', auth, rbac('hr_admin'), (req, res) => {
+router.post('/force-visa-emails', auth, rbac('hr_admin', 'manager'), (req, res) => {
   const { sendEmail, visaExpiryEmail } = require('../services/emailService');
   const today = dayjs();
 
