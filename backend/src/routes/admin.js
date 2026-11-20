@@ -178,4 +178,15 @@ router.get('/export/birthdays', auth, rbac('hr_admin'), (req, res) => {
   res.send(buf);
 });
 
+// Temporary: full visa audit across all employees
+router.get('/visa-audit', auth, rbac('hr_admin', 'manager'), (req, res) => {
+  const rows = db.prepare(`
+    SELECT full_name, department, email, is_active,
+           visa_expiry, visa_type, visa_number
+    FROM employees
+    ORDER BY visa_expiry ASC NULLS LAST, full_name
+  `).all();
+  res.json(rows);
+});
+
 module.exports = router;
