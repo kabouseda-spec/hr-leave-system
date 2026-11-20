@@ -105,6 +105,9 @@ for (const sql of migrations) {
   try { db.exec(sql); } catch(e) { /* column already exists — skip */ }
 }
 
+// Ensure owner flag is always set for the company owner
+try { db.exec("UPDATE employees SET is_owner=1 WHERE email='karim@kineticsgroup.ae'"); } catch(e) {}
+
 // ── One-time repair: fix backdate-bug corruption on unpaid leave records ──────
 // The old backdate endpoint had: paid = parseFloat(paid_days || 0) || totalDays
 // This caused paid=totalDays when paid_days=0, so unpaid_days was never stored.
