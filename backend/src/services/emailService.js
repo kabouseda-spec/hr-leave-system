@@ -226,4 +226,33 @@ function leaveApprovedNotifyEmail({ recipientName, employeeName, leaveType, star
   };
 }
 
-module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveStartedEmail, leaveApprovedNotifyEmail, personalTimeEmail, leaveCancelledEmail };
+function visaExpiryEmail({ recipientName, employeeName, visaExpiry, daysLeft, visaType, visaNumber }) {
+  const urgency = daysLeft <= 30 ? '#dc2626' : daysLeft <= 60 ? '#d97706' : '#1e40af';
+  const badge   = daysLeft <= 30 ? '🔴' : daysLeft <= 60 ? '🟡' : '🟠';
+  return {
+    subject: `${badge} Visa Expiry Alert — ${employeeName} (${daysLeft} days remaining)`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="background:${urgency};padding:20px;border-radius:8px 8px 0 0">
+          <h1 style="color:white;margin:0;font-size:20px">🗓️ HR Leave System</h1>
+          <p style="color:rgba(255,255,255,0.8);margin:4px 0 0">Kinetics Group</p>
+        </div>
+        <div style="background:#fffbeb;padding:24px;border:1px solid #fde68a;border-top:none;border-radius:0 0 8px 8px">
+          <p style="color:#374151">Hi <strong>${recipientName}</strong>,</p>
+          <p style="color:#374151">This is an automated visa expiry alert for the following employee:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#fffbeb"><td style="padding:10px 16px;color:#6b7280;width:40%">Employee</td><td style="padding:10px 16px;font-weight:600">${employeeName}</td></tr>
+            <tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Visa Expiry Date</td><td style="padding:10px 16px;font-weight:600;border-top:1px solid #f3f4f6;color:${urgency}">${visaExpiry}</td></tr>
+            <tr style="background:#fffbeb"><td style="padding:10px 16px;color:#6b7280">Days Remaining</td><td style="padding:10px 16px;font-weight:700;color:${urgency}">${daysLeft} days</td></tr>
+            ${visaType ? `<tr><td style="padding:10px 16px;color:#6b7280;border-top:1px solid #f3f4f6">Visa Type</td><td style="padding:10px 16px;font-weight:600;border-top:1px solid #f3f4f6">${visaType}</td></tr>` : ''}
+            ${visaNumber ? `<tr style="background:#fffbeb"><td style="padding:10px 16px;color:#6b7280">Visa Number</td><td style="padding:10px 16px;font-weight:600">${visaNumber}</td></tr>` : ''}
+          </table>
+          <p style="color:#374151">Please arrange for visa renewal as soon as possible to avoid any compliance issues.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Kinetics Group HR Leave System · sent by Wendy</p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+module.exports = { sendEmail, leaveRequestEmail, leaveApprovedEmail, leaveRejectedEmail, leaveStartedEmail, leaveApprovedNotifyEmail, personalTimeEmail, leaveCancelledEmail, visaExpiryEmail };

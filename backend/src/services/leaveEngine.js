@@ -547,24 +547,45 @@ function checkVisaReminders() {
   const today = dayjs();
   const employees = db.prepare("SELECT * FROM employees WHERE is_active=1 AND visa_expiry IS NOT NULL").all();
   const { v4: uuidv4 } = require('uuid');
+  const { sendEmail, visaExpiryEmail } = require('./emailService');
   const reminders = [];
 
   for (const emp of employees) {
     const expiry = dayjs(emp.visa_expiry);
     const daysLeft = expiry.diff(today, 'day');
 
-    // 90-day: notify HR admins
+    // 90-day: in-app notify HR admins + email owner + CC HR admins
     if (daysLeft <= 90 && daysLeft > 0 && !emp.visa_reminder_sent_90) {
-      const hrAdmins = db.prepare("SELECT id FROM employees WHERE role='hr_admin' AND is_active=1").all();
+      const hrAdmins = db.prepare("SELECT id, full_name, email FROM employees WHERE role='hr_admin' AND is_active=1").all();
       for (const hr of hrAdmins) {
         db.prepare("INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)")
           .run(uuidv4(), hr.id, `⚠️ Visa expiry reminder: ${emp.full_name}'s visa expires on ${emp.visa_expiry} (${daysLeft} days remaining).`, 'visa_reminder_90');
       }
+
+      // Email the owner directly; CC all HR admins
+      const owner = db.prepare("SELECT full_name, email FROM employees WHERE is_owner=1 AND is_active=1 LIMIT 1").get();
+      if (owner?.email) {
+        const ccEmails = hrAdmins.map(h => h.email).filter(e => e && e !== owner.email);
+        const cc = ccEmails.length ? ccEmails.join(', ') : undefined;
+        sendEmail({
+          to: owner.email,
+          cc,
+          ...visaExpiryEmail({
+            recipientName: owner.full_name,
+            employeeName:  emp.full_name,
+            visaExpiry:    emp.visa_expiry,
+            daysLeft,
+            visaType:      emp.visa_type   || null,
+            visaNumber:    emp.visa_number || null,
+          }),
+        });
+      }
+
       db.prepare("UPDATE employees SET visa_reminder_sent_90=1 WHERE id=?").run(emp.id);
       reminders.push({ employee: emp.full_name, days: daysLeft, type: '90-day' });
     }
 
-    // 30-day: notify the individual
+    // 30-day: notify the individual in-app
     if (daysLeft <= 30 && daysLeft > 0 && !emp.visa_reminder_sent_30) {
       db.prepare("INSERT INTO notifications (id,employee_id,message,type) VALUES (?,?,?,?)")
         .run(uuidv4(), emp.id, `🔔 Your visa expires on ${emp.visa_expiry} — ${daysLeft} days remaining. Please contact HR.`, 'visa_reminder_30');
